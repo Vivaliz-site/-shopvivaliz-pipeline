@@ -3,20 +3,37 @@ name: Pipeline
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+  actions: write
+
 jobs:
   run:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout pipeline repo
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v4
+      - name: Checkout Shopvivaliz-site
+        # Full read/write access to Shopvivaliz-site so pipeline steps can
+        # read assets (images, configs) and push processed results back.
+        uses: actions/checkout@v4
+        with:
+          repository: fredmourao-ai/Shopvivaliz-site
+          token: ${{ secrets.GH_PAT }}
+          path: shopvivaliz-site
+
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - run: pip install -r requirements.txt
 
-      - run: python scripts/main.py
+      - name: Run pipeline
+        run: python scripts/main.py
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - uses: actions/upload-artifact@v4
         with:

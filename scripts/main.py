@@ -2,6 +2,8 @@ import os
 from PIL import Image
 import pandas as pd
 
+from gpt_integration import enrich_dataframe
+
 os.makedirs("storage/processed", exist_ok=True)
 os.makedirs("logs", exist_ok=True)
 
@@ -24,6 +26,8 @@ def planilha():
     if "sku" not in df.columns:
         return
     df["image_url"] = df["sku"].apply(lambda x: f"https://dev.shopvivaliz.com.br/uploads/olist/{x}/1.jpg")
+    name_col = "nome" if "nome" in df.columns else None
+    df = enrich_dataframe(df, sku_col="sku", name_col=name_col)
     df.to_excel("planilhas/produtos_final.xlsx", index=False)
 
 processar()
