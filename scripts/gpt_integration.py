@@ -83,7 +83,7 @@ def analyze_product_image(image_path: str | Path, model: str = "gpt-4o-mini") ->
         return ""
     try:
         with open(image_path, "rb") as f:
-            encoded = base64.standard_b64encode(f.read()).decode("utf-8")
+            encoded = base64.b64encode(f.read()).decode("utf-8")
         suffix = image_path.suffix.lower().lstrip(".")
         mime = f"image/{'jpeg' if suffix in ('jpg', 'jpeg') else suffix}"
         response = client.chat.completions.create(
@@ -114,7 +114,7 @@ def analyze_product_image(image_path: str | Path, model: str = "gpt-4o-mini") ->
         return ""
 
 
-def enrich_dataframe(df, sku_col: str = "sku", name_col: str | None = None):
+def enrich_dataframe(df: "pd.DataFrame", sku_col: str = "sku", name_col: str | None = None) -> "pd.DataFrame":
     """Add AI-generated descriptions to a pandas DataFrame.
 
     Adds a new column ``descricao_gpt`` with a generated description for each row.
