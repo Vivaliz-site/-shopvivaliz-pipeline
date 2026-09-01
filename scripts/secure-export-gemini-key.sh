@@ -27,6 +27,7 @@ printf '%s' "$GEMINI_API_KEY" | openssl pkeyutl -encrypt \
   -inkey "$public_key_file" \
   -pkeyopt rsa_padding_mode:oaep \
   -pkeyopt rsa_oaep_md:sha256 \
+  -pkeyopt rsa_mgf1_md:sha256 \
   -out "$output_file"
 
 chmod 600 "$output_file"
