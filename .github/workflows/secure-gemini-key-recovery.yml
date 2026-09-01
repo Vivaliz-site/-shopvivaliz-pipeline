@@ -1,0 +1,69 @@
+name: Secure Gemini key recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-encrypt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate Gemini key without exposing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${GEMINI_API_KEY:-}" ]]; then
+            echo "GEMINI_API_KEY is missing or empty" >&2
+            exit 1
+          fi
+
+          status=$(
+            printf 'header = "x-goog-api-key: %s"\nurl = "https://generativelanguage.googleapis.com/v1beta/models"\nsilent\noutput = /dev/null\nwrite-out = %%{http_code}\nmax-time = 20\n' "$GEMINI_API_KEY" |
+              curl --config -
+          )
+          if [[ "$status" != "200" ]]; then
+            echo "Gemini credential validation failed with HTTP $status" >&2
+            exit 1
+          fi
+          echo "Gemini credential validation passed"
+
+      - name: Encrypt key for the production VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 .secure-export
+          cat > .secure-export/recipient.pem <<'PUBLIC_KEY'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA3Pn7XluQj9siu1xQto3a
+          ZPs2rU4ftRZFNjOLaJXoeE9LX+5OMu7BWDxeZPEN8o+wk3vzStPworAv/A2veDLC
+          iH+2bSCf/izn8ebypsDS5BtYcmY/8L+XfpmIrmBMGYZlYlBEl6BCdxNH9L5IQGQC
+          4I6pnusu4a9UozKZ0bPyF4raTXP4vUM1ZwWCFdGv6eQeD8yi9cw3wEYtWpvkc6mz
+          OGwqHFbqzRTilAyt9s3zhhK54+hZcsfUoK5EuyWMgx7Tio4QA3jdO+sCDcrzn0Qb
+          YZc6e1SUVguANLz5OJDQiL0zwGoM3+PGmrMeD71RaA4wqH4D7nqG0slSPE4Yq2Xn
+          GbyOD3emF0ctF9hCzcmm6dln7s4ubYhUP9GutaL8jtEGJqG5l+Ode3kONT1sSina
+          +JVzAQqHSj59AGWVnUR4XmAkJtqn6BwqsWLpcevrur9HJwWa44WQ3Jf39KLEVo7j
+          r0H1lXXsBcWxkFvPXCoI0kM/e1elIinNRbXzdVZoA87vAgMBAAE=
+          -----END PUBLIC KEY-----
+          PUBLIC_KEY
+          chmod 600 .secure-export/recipient.pem
+          bash scripts/secure-export-gemini-key.sh \
+            .secure-export/recipient.pem \
+            .secure-export/gemini-key.enc
+
+      - name: Upload encrypted key
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-key-recovery
+          path: .secure-export/gemini-key.enc
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
