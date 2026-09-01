@@ -27,6 +27,7 @@ openssl pkeyutl -decrypt \
   -in "$tmp_dir/gemini-key.enc" \
   -pkeyopt rsa_padding_mode:oaep \
   -pkeyopt rsa_oaep_md:sha256 \
+  -pkeyopt rsa_mgf1_md:sha256 \
   -out "$tmp_dir/decrypted.txt"
 
 if [[ "$(cat "$tmp_dir/decrypted.txt")" != "$GEMINI_API_KEY" ]]; then
