@@ -2,6 +2,11 @@ name: Pipeline
 
 on:
   workflow_dispatch:
+    inputs:
+      max_ai_calls:
+        description: "Maximum OpenAI model calls allowed for this run (hard ceiling: 500)"
+        required: true
+        default: '100'
 
 permissions:
   contents: write
@@ -10,6 +15,10 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: openai-pipeline-${{ github.repository }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout pipeline repo
@@ -34,6 +43,7 @@ jobs:
         run: python scripts/main.py
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AI_MAX_CALLS: ${{ inputs.max_ai_calls }}
 
       - uses: actions/upload-artifact@v4
         with:

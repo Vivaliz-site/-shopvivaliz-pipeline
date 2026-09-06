@@ -15,6 +15,27 @@ from pathlib import Path
 from openai import OpenAI
 
 _client: OpenAI | None = None
+_call_count = 0
+_HARD_MAX_AI_CALLS = 500
+
+
+def _get_call_budget() -> int:
+    raw = os.environ.get("AI_MAX_CALLS", "100").strip()
+    try:
+        budget = int(raw)
+    except ValueError as exc:
+        raise ValueError("AI_MAX_CALLS must be an integer between 1 and 500") from exc
+    if not 1 <= budget <= _HARD_MAX_AI_CALLS:
+        raise ValueError("AI_MAX_CALLS must be between 1 and 500")
+    return budget
+
+
+def _consume_call_budget() -> None:
+    global _call_count
+    budget = _get_call_budget()
+    if _call_count >= budget:
+        raise RuntimeError(f"AI call budget exhausted: {_call_count}/{budget}")
+    _call_count += 1
 
 
 def _get_client() -> OpenAI:
@@ -40,6 +61,7 @@ def generate_product_description(sku: str, product_name: str = "", model: str = 
     Returns:
         Generated description string, or empty string on failure.
     """
+    _consume_call_budget()
     client = _get_client()
     label = product_name if product_name else sku
     try:
@@ -77,6 +99,7 @@ def analyze_product_image(image_path: str | Path, model: str = "gpt-4o-mini") ->
     Returns:
         Description string, or empty string on failure.
     """
+    _consume_call_budget()
     client = _get_client()
     image_path = Path(image_path)
     if not image_path.exists():
@@ -130,6 +153,12 @@ def enrich_dataframe(df: "pd.DataFrame", sku_col: str = "sku", name_col: str | N
     if sku_col not in df.columns:
         print(f"[gpt_integration] Coluna '{sku_col}' não encontrada no DataFrame.")
         return df
+
+    remaining_calls = _get_call_budget() - _call_count
+    if len(df) > remaining_calls:
+        raise RuntimeError(
+            f"{len(df)} rows exceed remaining {remaining_calls}-call budget"
+        )
 
     def _describe(row):
         name = str(row[name_col]) if name_col and name_col in row.index else ""
