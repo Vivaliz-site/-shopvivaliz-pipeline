@@ -24,11 +24,15 @@ jobs:
         run: |
           test -s artifacts/audit-governance-self-test/report.json
           test -s artifacts/audit-governance-self-test/report.md
+          test -s artifacts/global-audit-policy/report.json
+          test -s artifacts/global-audit-policy/report.md
       - name: Upload audit governance self-test
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: audit-governance-self-test-${{ github.run_id }}
-          path: artifacts/audit-governance-self-test/
+          path: |
+            artifacts/audit-governance-self-test/
+            artifacts/global-audit-policy/
           if-no-files-found: error
           retention-days: 90
