@@ -1,0 +1,46 @@
+name: Global Audit Governance Fleet
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'AUDIT_POLICY.md'
+      - 'AGENTS.override.md'
+      - 'CLAUDE.md'
+      - 'GEMINI.md'
+      - 'docs/quality/**'
+      - 'scripts/validate-audit-governance.py'
+      - 'scripts/verify-global-audit-governance.py'
+      - '.github/workflows/global-audit-governance.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '23 7 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: global-audit-governance
+  cancel-in-progress: true
+
+jobs:
+  fleet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify global governance parity
+        run: python scripts/verify-global-audit-governance.py
+      - name: Upload fleet evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: global-audit-governance-${{ github.run_id }}
+          path: artifacts/global-audit-governance/
+          if-no-files-found: error
+          retention-days: 90
