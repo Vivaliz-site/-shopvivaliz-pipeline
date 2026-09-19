@@ -38,7 +38,10 @@ jobs:
       - name: Verify global governance parity
         env:
           AUDIT_FLEET_SELF_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
-        run: python scripts/verify-global-audit-governance.py
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          test -n "$GH_TOKEN"
+          python scripts/verify-global-audit-governance.py
       - name: Upload fleet evidence
         if: always()
         uses: actions/upload-artifact@v4
