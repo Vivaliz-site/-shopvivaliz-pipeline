@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -52,6 +53,8 @@ VERSION = "2026-09-19-universal-error-coverage-v4"
 
 
 def fetch(repo: str, path: str, ref: str = "main") -> bytes:
+    if repo == "-shopvivaliz-pipeline":
+        ref = os.environ.get("AUDIT_FLEET_SELF_REF", ref)
     quoted = "/".join(urllib.parse.quote(part, safe="") for part in path.split("/"))
     url = f"https://raw.githubusercontent.com/{ORG}/{repo}/{ref}/{quoted}"
     request = urllib.request.Request(url, headers={"User-Agent": "shopvivaliz-audit-governance/1"})
