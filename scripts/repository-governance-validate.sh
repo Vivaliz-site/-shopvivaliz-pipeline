@@ -8,4 +8,9 @@ fi
 cache_dir="${TMPDIR:-/tmp}/repo-governance-pycache-$$"
 trap 'rm -rf "$cache_dir"' EXIT
 PYTHONPYCACHEPREFIX="$cache_dir" "$python_bin" -m compileall -q scripts
+if [ "${1:-manual}" = "ci" ]; then
+  PYTHONPYCACHEPREFIX="$cache_dir" "$python_bin" scripts/validate-audit-governance.py --output-dir artifacts/audit-governance-self-test
+else
+  PYTHONPYCACHEPREFIX="$cache_dir" "$python_bin" scripts/validate-audit-governance.py
+fi
 if [ -d tests ]; then PYTHONPYCACHEPREFIX="$cache_dir" "$python_bin" -m unittest discover -s tests -p 'test*.py'; fi
