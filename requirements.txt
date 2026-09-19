@@ -1,0 +1,5 @@
+pillow
+pandas
+openpyxl
+requests
+openai>=1.0.0
