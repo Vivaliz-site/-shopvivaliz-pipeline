@@ -13,4 +13,9 @@ if [ "${1:-manual}" = "ci" ]; then
 else
   PYTHONPYCACHEPREFIX="$cache_dir" "$python_bin" scripts/validate-audit-governance.py
 fi
+if [ "${1:-manual}" = "ci" ]; then
+  GITHUB_REPOSITORY="Vivaliz-site/-shopvivaliz-pipeline" PYTHONPYCACHEPREFIX="$cache_dir" "$python_bin" scripts/validate-global-audit-policy.py --output-dir artifacts/global-audit-policy
+else
+  GITHUB_REPOSITORY="Vivaliz-site/-shopvivaliz-pipeline" PYTHONPYCACHEPREFIX="$cache_dir" "$python_bin" scripts/validate-global-audit-policy.py
+fi
 if [ -d tests ]; then PYTHONPYCACHEPREFIX="$cache_dir" "$python_bin" -m unittest discover -s tests -p 'test*.py'; fi
