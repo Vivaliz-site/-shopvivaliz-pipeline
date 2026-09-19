@@ -18,9 +18,9 @@ Método: `AUDIT_POLICY.md` versão `2026-09-19-universal-architecture-v5`, Runti
 | site-shopvivaliz | 4726 | 351 | 429 | `master-production-pipeline.yml` + PHP monolítico | melhorias aplicadas; redução de workflow sprawl ainda necessária |
 | -shopvivaliz-pipeline | 46 | 3 | 1 | `git_autonomous_agent.py` (659 linhas) | governança global consolidada; ampliar testes |
 | amazon-returns-safet | 632 | 5 | 361 | Seller Central bridge (1520 linhas), daemon (1023) | CI forte; separar provisionamento de release |
-| ml-pricing-api | 219 | 2 | 48 | pricing/listing/order | segurança de env em remediação; falta deploy imutável/proveniência |
+| ml-pricing-api | 219 | 2 | 48 | pricing/listing/order | env hardening integrado; falta deploy imutável/proveniência |
 | mercadolivre-returns-recovery | 250 | 3 | 80 | production ops (553), projection repo (408) | CI rápido; mover Composer do cutover para artifact |
-| shopvivaliz-m365 | 56 | 3 | 0 no início | automation (343), Exchange client (275) | testes e deploy hardening aplicados nesta auditoria |
+| shopvivaliz-m365 | 56 | 3 | 0 no início | automation (343), Exchange client (275) | deploy hardening + 9 testes unitários adicionados |
 
 > Contagem de testes é baseada no inventário por caminhos/nomes rastreados na coleta; para M365 o snapshot inicial tinha zero. A auditoria adicionou uma suíte unitária posteriormente.
 
@@ -79,20 +79,21 @@ Amostras recentes antes/durante a auditoria:
 - Decompor bridge/daemon preservando state machine e idempotência.
 
 ### 4. ML Pricing API
-**CORRIGIDO / EM VALIDAÇÃO**
+**CORRIGIDO**
 - Arquivos `.env` reais removidos do HEAD do branch de remediação.
 - Exemplos sanitizados criados.
 - CI passa a rejeitar env real rastreado.
 - Validador dos templates alterado para usar somente exemplos sanitizados.
 - Composer cache adicionado.
 - Symfony recebe `.env` somente de forma efêmera no workspace de CI.
+- PR de remediação integrado após Audit Governance + CI funcional verdes.
 
 **SECURITY FINDING**
-O snapshot inicial possuía campos sensíveis não-placeholder em `.env.test`, inclusive segredo de cliente e chave de criptografia. Nenhum valor foi reproduzido neste relatório.
+O snapshot inicial possuía campos com nomes sensíveis em `.env.test`. A análise histórica sem revelar valores mostrou URLs locais, marcadores sintéticos/teste nos segredos e chave Base64 de baixíssima entropia (2 caracteres únicos). Não houve evidência técnica de credencial de produção exposta; a remoção do tracking continua correta como hardening preventivo.
 
 **IMPROVEMENT_REQUIRED**
-- Após merge da remoção, avaliar rotação das credenciais potencialmente expostas.
-- Limpeza retroativa do histórico só com plano/backup, pois reescrever histórico é destrutivo.
+- Rotação não é exigida apenas pela evidência atual, pois os valores observados eram sintéticos/locais; reavaliar somente se houver prova de reutilização fora do ambiente de teste.
+- Limpeza retroativa do histórico não é necessária para segredo real com a evidência atual; qualquer reescrita futura continua sendo ação destrutiva.
 - Há units systemd no repositório, mas não foi encontrado caminho de deploy imutável/proveniência comparável ao site/SAFE-T.
 - Criar `commit → artifact → release → current → health/version` antes de considerar produção plenamente reproduzível.
 
@@ -123,7 +124,7 @@ O snapshot inicial possuía campos sensíveis não-placeholder em `.env.test`, i
 - CI valida sintaxe do script de deploy.
 - Bug de precedência encontrado: documentação dizia `environment > YAML > env_file`, mas YAML sobrescrevia environment.
 - Loader corrigido e coberto por teste.
-- Testes sem rede adicionados para configuração, auth/cache MSAL e Graph.
+- 9 testes sem rede adicionados para configuração, auth/cache MSAL e Graph.
 - Governance CI com pip cache + pytest ficou verde.
 
 **IMPROVEMENT_REQUIRED**
