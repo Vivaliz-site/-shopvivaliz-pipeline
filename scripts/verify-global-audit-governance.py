@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -42,7 +43,7 @@ ENTRYPOINT_MARKERS = {
 
 WORKFLOW_MARKERS = {
     "site-shopvivaliz": (".github/workflows/repository-governance.yml", "validate-audit-governance.py"),
-    "-shopvivaliz-pipeline": (".github/workflows/repository-governance.yml", "validate-audit-governance.py"),
+    "-shopvivaliz-pipeline": ("scripts/repository-governance-validate.sh", "validate-audit-governance.py"),
     "amazon-returns-safet": (".github/workflows/audit-governance.yml", "validate-audit-governance.py"),
     "ml-pricing-api": (".github/workflows/audit-governance.yml", "validate-audit-governance.py"),
     "mercadolivre-returns-recovery": (".github/workflows/audit-governance.yml", "validate-audit-governance.py"),
@@ -55,11 +56,26 @@ VERSION = "2026-09-19-universal-error-coverage-v4"
 def fetch(repo: str, path: str, ref: str = "main") -> bytes:
     if repo == "-shopvivaliz-pipeline":
         ref = os.environ.get("AUDIT_FLEET_SELF_REF", ref)
-    quoted = "/".join(urllib.parse.quote(part, safe="") for part in path.split("/"))
-    url = f"https://raw.githubusercontent.com/{ORG}/{repo}/{ref}/{quoted}"
-    request = urllib.request.Request(url, headers={"User-Agent": "shopvivaliz-audit-governance/1"})
+    quoted_path = "/".join(urllib.parse.quote(part, safe="") for part in path.split("/"))
+    quoted_ref = urllib.parse.quote(ref, safe="")
+    url = f"https://api.github.com/repos/{ORG}/{repo}/contents/{quoted_path}?ref={quoted_ref}"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "shopvivaliz-audit-governance/1",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.environ.get("GH_TOKEN", "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request, timeout=20) as response:
-        return response.read()
+        payload = json.load(response)
+    if not isinstance(payload, dict) or payload.get("type") != "file":
+        raise RuntimeError(f"Unexpected GitHub contents response for {repo}/{path}")
+    content = payload.get("content", "")
+    if payload.get("encoding") != "base64" or not content:
+        raise RuntimeError(f"Missing base64 content for {repo}/{path}")
+    return base64.b64decode(content)
 
 
 def sha256(data: bytes) -> str:
