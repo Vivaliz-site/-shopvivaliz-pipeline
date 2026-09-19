@@ -17,3 +17,8 @@ Quando houver auditoria completa/extrema, validação de release/apto ou gatilho
 
 ## Auditoria de arquitetura/deploy
 Em Auditoria Extrema, leia e execute também `docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.md`. Avalie caminho crítico de CI/deploy, runners, build/artifact, cache, provisionamento/restarts, migrations, contratos cross-repo, ownership de dados, workflow sprawl, hotspots e rollback.
+
+<!-- EXECUTION_PROVENANCE_POLICY_V1 -->
+## Assinatura e origem obrigatorias de toda execucao
+
+Antes de qualquer acao material, leia e cumpra EXECUTION-PROVENANCE-POLICY.md. Toda execucao automatizada ou operacional deve carregar identidade, origem e execution_id verificaveis; recursos temporarios devem ter owner/origin e cleanup. Use scripts/emit-execution-provenance.py como formato de referencia. Nunca registre secrets.

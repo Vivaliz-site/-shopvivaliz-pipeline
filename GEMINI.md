@@ -5,3 +5,6 @@ Antes de qualquer alteração, carregue e siga integralmente o protocolo canôni
 @./AI-TO-CLI-PROTOCOL.md
 
 Ele complementa as regras específicas do projeto. Nenhuma alteração válida da tarefa pode ser abandonada sem merge validado na branch de destino.
+
+<!-- EXECUTION_PROVENANCE_POLICY_V1 -->
+Leia e cumpra EXECUTION-PROVENANCE-POLICY.md antes de qualquer execucao material.
