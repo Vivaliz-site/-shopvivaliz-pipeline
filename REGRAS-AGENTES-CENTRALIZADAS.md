@@ -1,12 +1,12 @@
 # 📋 REGRAS PARA AGENTES IA - FONTE ÚNICA CENTRALIZADA
 
-**Efetivo:** 2026-07-24
-**Escopo:** Todos os agentes (Claude, Codex, Gemini, GPT, etc.)
-**Aplicável a:** Qualquer tarefa automatizada (deploy, testes, integrações, ERP, pagamentos, emails, secrets)
+**Efetivo:** 2026-07-24  
+**Escopo:** Todos os agentes (Claude, Codex, Gemini, GPT, etc.)  
+**Aplicável a:** Qualquer tarefa automatizada (deploy, testes, integrações, ERP, pagamentos, emails, secrets)  
 **Objetivo:** Eliminar falsos positivos, exigir evidência verificável antes de declarar sucesso
 
-> ⚠️ **ESTA É A FONTE ÚNICA DE VERDADE PARA TODAS AS REGRAS.**
-> Outros arquivos (VALIDATION-POLICY.md, SECRETS-SYNC-RULE.md, etc.) são DEPRECADOS.
+> ⚠️ **ESTA É A FONTE ÚNICA DE VERDADE PARA TODAS AS REGRAS.**  
+> Outros arquivos (VALIDATION-POLICY.md, SECRETS-SYNC-RULE.md, etc.) são DEPRECADOS.  
 > Veja [Referências Cruzadas](#referências-cruzadas) para documentação específica.
 
 ---
@@ -217,7 +217,7 @@ git merge --ff-only # ← Não roda se git fetch falhou
 | HTTP | GET / retorna HTTP 200 com conteúdo esperado |
 | Logs | Logs de deploy sem erros |
 
-### Git & Sincronização
+### Git & Sincronização  
 | Componente | Evidência Mínima |
 |-----------|-----------------|
 | Commit | SHA local completo + mensagem |
@@ -324,7 +324,7 @@ PROCESSO OBRIGATÓRIO:
 ## 🔐 SINCRONIZAÇÃO OBRIGATÓRIA DE SECRETS (3 AMBIENTES)
 
 ### Regra Crítica
-> **CRÍTICO**: Toda alteração de secret DEVE ser sincronizada em TODOS os 3 ambientes simultaneamente.
+> **CRÍTICO**: Toda alteração de secret DEVE ser sincronizada em TODOS os 3 ambientes simultaneamente.  
 > **Nunca** deixar um secret desincronizado por mais de 5 minutos.
 
 ### Quando Aplica
@@ -535,9 +535,9 @@ git commit -m "fix: sincronizar secrets desincronizados (SOURCE: GitHub)"
 
 ---
 
-**Versão:** 2.0 (Consolidada)
-**Atualizado:** 2026-07-24
-**Próxima Revisão:** 2026-08-07
+**Versão:** 2.0 (Consolidada)  
+**Atualizado:** 2026-07-24  
+**Próxima Revisão:** 2026-08-07  
 **Status:** ✅ FONTE ÚNICA DE VERDADE
 
 ## Gate obrigatorio de resposta final e deploy (FINAL_RESPONSE_DEPLOY_GATE_V1)
@@ -574,7 +574,7 @@ Toda Auditoria Extrema deve incluir `docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.m
 Esta politica vale para todos os agentes e prevalece sobre qualquer instrucao antiga de escolher/perguntar host para navegacao.
 
 - Qualquer navegador, sessao grafica, automacao browser, Playwright/Selenium/CDP, Chrome/Chromium/Edge/Opera, CAPTCHA, MFA, consentimento ou validacao visual deve executar por padrao e obrigatoriamente na VM backend `always-free-arm-1787907847-26` (`10.0.1.38`) usando o Browser Worker privado.
-- Para intervencao humana em MFA/CAPTCHA/consentimento, usar `https://shopvivaliz.com.br/admin/browser-worker.php`.
+- Para intervencao humana em MFA/CAPTCHA/consentimento, usar a interface autenticada `https://shopvivaliz.com.br/admin/browser-worker.php`.
 - Fred-Win (`LAPTOP-NIG4IFUU`) e `DESKTOP-KOCEPSV` sao proibidos como destino ou fallback de navegacao/browser.
 - O agente nao deve perguntar qual maquina usar para browser: o destino canonico e a VM backend. Excecao somente quando o proprietario ordenar explicitamente, na tarefa atual, o uso de um Windows especifico para aquela navegacao.
 - Se a VM/browser worker estiver indisponivel, reparar via OCI Bastion, tunel privado ou control plane canonico; nunca fazer fallback silencioso para Windows.
