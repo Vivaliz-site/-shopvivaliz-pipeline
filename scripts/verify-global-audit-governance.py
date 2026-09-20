@@ -24,6 +24,25 @@ REPOSITORIES = [
     "shopvivaliz-m365",
 ]
 
+BROWSER_POLICY_REPOSITORIES = [
+    "Vivaliz-site/site-shopvivaliz",
+    "Vivaliz-site/-shopvivaliz-pipeline",
+    "Vivaliz-site/amazon-returns-safet",
+    "Vivaliz-site/ml-pricing-api",
+    "Vivaliz-site/mercadolivre-returns-recovery",
+    "Vivaliz-site/shopvivaliz-m365",
+    "fredmourao-ai/solange-rolla-consultorio",
+    "fredmourao-ai/solange-rolla",
+    "fredmourao-ai/mei-mg-email",
+]
+BROWSER_POLICY_MARKER = "GLOBAL_BROWSER_VM_POLICY_V2"
+BROWSER_POLICY_FILES = [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "REGRAS-AGENTES-CENTRALIZADAS.md",
+]
+
 EXACT_FILES = [
     "AUDIT_POLICY.md",
     "AGENTS.override.md",
@@ -75,6 +94,32 @@ def fetch(repo: str, path: str, ref: str = "main") -> bytes:
     content = payload.get("content", "")
     if payload.get("encoding") != "base64" or not content:
         raise RuntimeError(f"Missing base64 content for {repo}/{path}")
+    return base64.b64decode(content)
+
+
+def fetch_slug(repo_slug: str, path: str, ref: str = "main") -> bytes:
+    owner, repo = repo_slug.split("/", 1)
+    if repo_slug == "Vivaliz-site/-shopvivaliz-pipeline":
+        ref = os.environ.get("AUDIT_FLEET_SELF_REF", ref)
+    quoted_path = "/".join(urllib.parse.quote(part, safe="") for part in path.split("/"))
+    quoted_ref = urllib.parse.quote(ref, safe="")
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{quoted_path}?ref={quoted_ref}"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "shopvivaliz-audit-governance/1",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.environ.get("GH_TOKEN", "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.load(response)
+    if not isinstance(payload, dict) or payload.get("type") != "file":
+        raise RuntimeError(f"Unexpected GitHub contents response for {repo_slug}/{path}")
+    content = payload.get("content", "")
+    if payload.get("encoding") != "base64" or not content:
+        raise RuntimeError(f"Missing base64 content for {repo_slug}/{path}")
     return base64.b64decode(content)
 
 
@@ -142,6 +187,24 @@ def main() -> int:
         except Exception as exc:
             findings.append({"repo": repo, "path": "docs/quality/AUDIT_OVERLAY.md", "kind": "missing_or_unreadable", "detail": str(exc)})
 
+    for repo_slug in BROWSER_POLICY_REPOSITORIES:
+        for path in BROWSER_POLICY_FILES:
+            try:
+                if BROWSER_POLICY_MARKER not in fetch_slug(repo_slug, path).decode("utf-8-sig"):
+                    findings.append({
+                        "repo": repo_slug,
+                        "path": path,
+                        "kind": "browser_vm_policy_missing",
+                        "detail": BROWSER_POLICY_MARKER,
+                    })
+            except Exception as exc:
+                findings.append({
+                    "repo": repo_slug,
+                    "path": path,
+                    "kind": "browser_vm_policy_unreadable",
+                    "detail": str(exc),
+                })
+
     args.output_dir.mkdir(parents=True, exist_ok=True)
     report = {
         "schema": "AUDIT_CROSS_REPO_PROPAGATION_V1",
@@ -149,6 +212,8 @@ def main() -> int:
         "canonical_repository": f"{ORG}/{CANONICAL}",
         "repositories": REPOSITORIES,
         "exact_files": EXACT_FILES,
+        "browser_policy_repositories": BROWSER_POLICY_REPOSITORIES,
+        "browser_policy_marker": BROWSER_POLICY_MARKER,
         "findings": findings,
         "status": "PASS" if not findings else "FAIL",
     }
