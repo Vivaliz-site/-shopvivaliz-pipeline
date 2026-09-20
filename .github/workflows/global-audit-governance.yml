@@ -6,11 +6,9 @@ on:
     branches: [main]
     paths:
       - 'AUDIT_POLICY.md'
-      - 'AGENTS.md'
       - 'AGENTS.override.md'
       - 'CLAUDE.md'
       - 'GEMINI.md'
-      - 'REGRAS-AGENTES-CENTRALIZADAS.md'
       - 'docs/quality/**'
       - 'scripts/validate-audit-governance.py'
       - 'scripts/verify-global-audit-governance.py'
