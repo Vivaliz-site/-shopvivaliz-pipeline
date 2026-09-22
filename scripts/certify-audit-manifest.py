@@ -4,15 +4,30 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
 from pathlib import Path
 
 SCHEMA = "AUDIT_CERTIFICATION_MANIFEST_V1"
+PROJECT_REQUIREMENTS_SCHEMA = "AUDIT_PROJECT_REQUIREMENTS_V1"
 POLICY_VERSION = "2026-09-21-absolute-v5"
 SHA40 = re.compile(r"^[0-9a-fA-F]{40}$")
 SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
+
+REQUIRED_REPOSITORIES = [
+    "Vivaliz-site/site-shopvivaliz",
+    "Vivaliz-site/-shopvivaliz-pipeline",
+    "Vivaliz-site/amazon-returns-safet",
+    "Vivaliz-site/ml-pricing-api",
+    "Vivaliz-site/mercadolivre-returns-recovery",
+    "Vivaliz-site/shopvivaliz-m365",
+    "Vivaliz-site/buscador",
+    "fredmourao-ai/mei-mg-email",
+    "fredmourao-ai/solange-rolla-consultorio",
+    "fredmourao-ai/solange-rolla",
+]
 
 REQUIRED_NONEMPTY = [
     "identity.audit_id",
@@ -27,6 +42,7 @@ REQUIRED_NONEMPTY = [
     "fingerprint.schema_version",
     "fingerprint.config_fingerprint",
     "fingerprint.feature_flags_fingerprint",
+    "project_invariants.requirements_fingerprint",
 ]
 
 REQUIRED_TRUE = [
@@ -67,6 +83,8 @@ REQUIRED_TRUE = [
     "clean_room.completed_or_not_material",
     "chaos_recovery.completed_or_not_material",
     "visual.interaction_regression_complete_or_not_material",
+    "auth_discovery.complete_or_not_material",
+    "project_invariants.complete",
     "tests.no_flaky_false_green",
     "tests.self_test_complete_when_applicable",
     "tests.certifier_mutation_self_test_passed",
@@ -102,6 +120,8 @@ REQUIRED_ZERO = [
     "coverage.uncovered_material_journeys",
     "data.unexplained_difference_count",
     "runtime.unresolved_error_count",
+    "project_invariants.failed_required_count",
+    "project_invariants.missing_required_count",
 ]
 
 DEPLOY_REQUIRED_TRUE = [
@@ -152,6 +172,20 @@ CHAOS_REQUIRED_TRUE = [
     "chaos_recovery.alert_recovery_checked",
 ]
 
+AUTH_DISCOVERY_REQUIRED_TRUE = [
+    "auth_discovery.all_repositories_scanned",
+    "auth_discovery.repo_secret_references_checked",
+    "auth_discovery.runtime_secret_stores_checked",
+    "auth_discovery.canonical_profiles_checked",
+    "auth_discovery.oauth_cli_sessions_checked",
+    "auth_discovery.alternative_transports_checked",
+    "auth_discovery.safe_probe_attempted",
+    "auth_discovery.exhausted",
+    "auth_discovery.no_secret_exposure",
+]
+
+AUTH_BLOCKER_CATEGORIES = {"AUTH", "LOGIN", "CREDENTIAL", "OAUTH", "SESSION"}
+
 
 def get_path(data: dict, dotted: str):
     value = data
@@ -187,6 +221,10 @@ def validate_identity(data: dict, failures: list[str]) -> None:
     sha = get_path(data, "identity.commit_sha")
     if isinstance(sha, str) and sha and not SHA40.match(sha):
         failures.append("identity.commit_sha must be a full 40-char Git SHA")
+
+    repository = get_path(data, "identity.repository")
+    if repository not in REQUIRED_REPOSITORIES:
+        failures.append("identity.repository is not in the governed repository set")
 
     primary = get_path(data, "identity.primary_auditor")
     reviewer = get_path(data, "contradictory_review.reviewer")
@@ -230,13 +268,13 @@ def validate_evidence(data: dict, failures: list[str]) -> set[str]:
     return ids
 
 
-def validate_journeys(data: dict, artifact_ids: set[str], failures: list[str]) -> None:
+def validate_journeys(data: dict, artifact_ids: set[str], failures: list[str]) -> set[str]:
     journeys = data.get("journeys")
     if not isinstance(journeys, list) or not journeys:
         failures.append("journeys must contain at least one enumerated journey")
-        return
+        return set()
 
-    seen = set()
+    seen: set[str] = set()
     for index, journey in enumerate(journeys):
         prefix = f"journeys[{index}]"
         if not isinstance(journey, dict):
@@ -287,9 +325,148 @@ def validate_journeys(data: dict, artifact_ids: set[str], failures: list[str]) -
             ]:
                 if browser.get(field) is not True:
                     failures.append(f"{prefix}.browser_e2e.{field} must be true")
+    return seen
 
 
-def certify(data: dict) -> tuple[str, list[str]]:
+def validate_auth_discovery(data: dict, failures: list[str]) -> None:
+    auth = data.get("auth_discovery")
+    if not isinstance(auth, dict):
+        failures.append("auth_discovery must be an object")
+        return
+
+    required = auth.get("required")
+    if required not in (True, False):
+        failures.append("auth_discovery.required must be boolean")
+        return
+    if not required:
+        return
+
+    add_bool_failures(data, AUTH_DISCOVERY_REQUIRED_TRUE, failures)
+
+    expected = auth.get("repositories_expected")
+    scanned = auth.get("repositories_scanned")
+    if expected != REQUIRED_REPOSITORIES:
+        failures.append("auth_discovery.repositories_expected must exactly match governed repositories")
+    if not isinstance(scanned, list) or set(scanned) != set(REQUIRED_REPOSITORIES) or len(scanned) != len(REQUIRED_REPOSITORIES):
+        failures.append("auth_discovery.repositories_scanned must cover every governed repository exactly once")
+    if auth.get("repositories_expected_count") != len(REQUIRED_REPOSITORIES):
+        failures.append("auth_discovery.repositories_expected_count mismatch")
+    if auth.get("repositories_scanned_count") != len(REQUIRED_REPOSITORIES):
+        failures.append("auth_discovery.repositories_scanned_count mismatch")
+
+
+def load_project_requirements(path: Path) -> tuple[dict, str]:
+    raw = path.read_bytes()
+    data = json.loads(raw.decode("utf-8"))
+    return data, hashlib.sha256(raw).hexdigest()
+
+
+def validate_project_requirements(
+    data: dict,
+    requirements: dict | None,
+    requirements_fingerprint: str | None,
+    artifact_ids: set[str],
+    journey_ids: set[str],
+    failures: list[str],
+) -> None:
+    if not isinstance(requirements, dict):
+        failures.append("project requirements file is required")
+        return
+    if requirements.get("schema") != PROJECT_REQUIREMENTS_SCHEMA:
+        failures.append(f"project requirements schema must be {PROJECT_REQUIREMENTS_SCHEMA}")
+
+    repository = get_path(data, "identity.repository")
+    if requirements.get("project") != repository:
+        failures.append("project requirements project must match identity.repository")
+
+    if requirements_fingerprint is None or get_path(data, "project_invariants.requirements_fingerprint") != requirements_fingerprint:
+        failures.append("project_invariants.requirements_fingerprint does not match requirements file")
+
+    required = requirements.get("required_invariants")
+    if not isinstance(required, list):
+        failures.append("project requirements required_invariants must be a list")
+        return
+
+    project_inv = data.get("project_invariants")
+    if not isinstance(project_inv, dict):
+        failures.append("project_invariants must be an object")
+        return
+    results = project_inv.get("results")
+    if not isinstance(results, list):
+        failures.append("project_invariants.results must be a list")
+        return
+
+    by_id: dict[str, dict] = {}
+    for result in results:
+        if isinstance(result, dict) and isinstance(result.get("id"), str):
+            by_id[result["id"]] = result
+
+    for req in required:
+        if not isinstance(req, dict) or not isinstance(req.get("id"), str):
+            failures.append("each project requirement must have a string id")
+            continue
+        rid = req["id"]
+        result = by_id.get(rid)
+        if not isinstance(result, dict):
+            failures.append(f"missing project invariant result: {rid}")
+            continue
+        if result.get("status") != "COMPROVADO":
+            failures.append(f"project invariant {rid} must be COMPROVADO")
+
+        refs = result.get("evidence_refs")
+        if not isinstance(refs, list) or not refs:
+            failures.append(f"project invariant {rid} requires evidence_refs")
+        else:
+            for ref in refs:
+                if not isinstance(ref, str) or ref not in artifact_ids:
+                    failures.append(f"project invariant {rid} references unknown artifact: {ref!r}")
+
+        rtype = req.get("type", "evidence")
+        if rtype == "journey_ids":
+            for jid in req.get("required_journey_ids", []):
+                if jid not in journey_ids:
+                    failures.append(f"project invariant {rid} missing required journey: {jid}")
+        elif rtype == "provider_chat":
+            details = result.get("details")
+            chat = details.get("provider_chat") if isinstance(details, dict) else None
+            if not isinstance(chat, dict):
+                failures.append(f"project invariant {rid} requires details.provider_chat")
+                continue
+            for flag in ["same_cycle", "ui_visible", "cycle_finished_ok", "health_verified"]:
+                if chat.get(flag) is not True:
+                    failures.append(f"project invariant {rid} provider_chat.{flag} must be true")
+            if req.get("consensus_required") is True and chat.get("consensus_emitted") is not True:
+                failures.append(f"project invariant {rid} consensus must be emitted")
+            provider_results = chat.get("providers")
+            if not isinstance(provider_results, dict):
+                failures.append(f"project invariant {rid} provider results missing")
+                continue
+            phases = req.get("phases", [])
+            for provider in req.get("providers", []):
+                state = provider_results.get(provider)
+                if not isinstance(state, dict):
+                    failures.append(f"project invariant {rid} provider missing: {provider}")
+                    continue
+                for flag in ["active", "responded", "nonempty_response", "visible"]:
+                    if state.get(flag) is not True:
+                        failures.append(f"project invariant {rid} {provider}.{flag} must be true")
+                phase_results = state.get("phases")
+                if phases:
+                    if not isinstance(phase_results, dict):
+                        failures.append(f"project invariant {rid} {provider}.phases missing")
+                    else:
+                        for phase in phases:
+                            if phase_results.get(phase) is not True:
+                                failures.append(f"project invariant {rid} {provider}.phases.{phase} must be true")
+        elif rtype != "evidence":
+            failures.append(f"unsupported project invariant type: {rtype}")
+
+
+def certify(
+    data: dict,
+    project_requirements: dict | None = None,
+    project_requirements_fingerprint: str | None = None,
+) -> tuple[str, list[str]]:
     failures: list[str] = []
 
     if data.get("schema") != SCHEMA:
@@ -300,7 +477,16 @@ def certify(data: dict) -> tuple[str, list[str]]:
     add_zero_failures(data, REQUIRED_ZERO, failures)
 
     artifact_ids = validate_evidence(data, failures)
-    validate_journeys(data, artifact_ids, failures)
+    journey_ids = validate_journeys(data, artifact_ids, failures)
+    validate_auth_discovery(data, failures)
+    validate_project_requirements(
+        data,
+        project_requirements,
+        project_requirements_fingerprint,
+        artifact_ids,
+        journey_ids,
+        failures,
+    )
 
     browser_required = get_path(data, "browser.required")
     if browser_required not in (True, False):
@@ -332,6 +518,7 @@ def certify(data: dict) -> tuple[str, list[str]]:
     external = get_path(data, "remediation.blocked_external_count")
     external_proven = get_path(data, "remediation.blocked_external_proven")
     executable = get_path(data, "remediation.executable_blockers")
+    category = str(get_path(data, "remediation.blocked_external_category") or "").upper()
 
     if type(external) is not int or external < 0:
         failures.append("remediation.blocked_external_count must be a non-negative integer")
@@ -342,6 +529,8 @@ def certify(data: dict) -> tuple[str, list[str]]:
             failures.append("remediation.blocked_external_proven must be true for BLOCKED_EXTERNAL")
         if executable != 0:
             failures.append("cannot claim BLOCKED_EXTERNAL while executable blockers remain")
+        if category in AUTH_BLOCKER_CATEGORIES and get_path(data, "auth_discovery.required") is not True:
+            failures.append("auth/login BLOCKED_EXTERNAL requires exhaustive auth discovery")
         return "BLOCKED_EXTERNAL", failures or ["external blocker remains"]
 
     return ("APTO" if not failures else "NAO_APTO"), failures
@@ -351,6 +540,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--json-output", type=Path)
+    parser.add_argument(
+        "--project-requirements",
+        type=Path,
+        default=Path("docs/quality/AUDIT_PROJECT_REQUIREMENTS.json"),
+    )
     args = parser.parse_args()
 
     try:
@@ -359,7 +553,13 @@ def main() -> int:
         print(f"AUDIT_CERTIFIER_ERROR={type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
 
-    verdict, failures = certify(data)
+    try:
+        requirements, requirements_fingerprint = load_project_requirements(args.project_requirements)
+    except Exception as exc:
+        print(f"AUDIT_PROJECT_REQUIREMENTS_ERROR={type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+
+    verdict, failures = certify(data, requirements, requirements_fingerprint)
     report = {
         "schema": SCHEMA,
         "policy_version": POLICY_VERSION,
