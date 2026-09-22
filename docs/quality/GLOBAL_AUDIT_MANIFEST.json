@@ -17,7 +17,7 @@
   ],
   "required_blobs": {
     "AUDIT_POLICY.md": "55ec4450f2b1807559751f145d80604c28598d89",
-    "docs/quality/EXTREME_AUDIT_PROTOCOL.md": "68c9f00f0f77dd5d65e01a3a7e71f3434996ce5e",
+    "docs/quality/EXTREME_AUDIT_PROTOCOL.md": "6d62c7759612e1e6dbb42a4baa6d870db332e58e",
     "docs/quality/AUDIT_RUNTIME_PARITY_V1.md": "518ee124b471dd9c8405e38acece9fd3bc531186",
     "docs/quality/AUDIT_UNIVERSAL_COVERAGE_V1.md": "f679f79818756a331fcdbae72e3552d32b94f370",
     "docs/quality/AUDIT_SELF_TEST_V1.md": "d1f04e1f5ded1c7f2b973c3bbd9a8385fab81139",
