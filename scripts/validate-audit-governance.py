@@ -112,7 +112,7 @@ REQUIRED_MARKERS = {
         "Invariantes locais machine-readable",
         "provider_chat",
         "Requisito local ausente",
-    ],,
+    ],
     "docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md": [
         "Enforcement de merge",
         "Governance bridge obrigatório",
