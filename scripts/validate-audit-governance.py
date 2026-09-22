@@ -13,11 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_MARKERS = {
     "AUDIT_POLICY.md": [
-        "2026-09-19-universal-architecture-v5",
+        "2026-09-21-absolute-v5",
         "AUDIT_UNIVERSAL_COVERAGE_V1",
         "AUDIT_SELF_TEST_V1",
         "ARCHITECTURE_DEPLOY_AUDIT_V1",
         "AUDIT_DEFINITION_OF_DONE_V1",
+        "AUDIT_ABSOLUTE_GATE_V1",
     ],
     "docs/quality/EXTREME_AUDIT_PROTOCOL.md": [
         "MAPEAR → IMPACTAR",
@@ -56,6 +57,51 @@ REQUIRED_MARKERS = {
         "Falhas silenciosas",
         "Self-test dos gates",
         "Unknown unknowns",
+    ],,
+    "docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md": [
+        "E2E real obrigatório",
+        "no navegador real",
+        "Gate fatal",
+    ],
+    "docs/quality/AUDIT_APTO_REMEDIATION_LOOP_V1.md": [
+        "Remediação autônoma até APTO",
+        "Loop obrigatório",
+        "BLOCKED_EXTERNAL",
+    ],
+    "docs/quality/AUDIT_JOURNEY_INVENTORY_V1.md": [
+        "Inventário exaustivo",
+        "UNMAPPED_SURFACE",
+        "untested_material_controls",
+    ],
+    "docs/quality/AUDIT_ESCAPE_INVALIDATION_V1.md": [
+        "invalida certificação",
+        "INVALIDATED_BY_AUDIT_ESCAPE",
+        "Aprendizado obrigatório",
+    ],
+    "docs/quality/AUDIT_HARDENING_MAX_V1.md": [
+        "CONFIG_RELEASE_FINGERPRINT_V1",
+        "DUAL_ORACLE_RECONCILIATION_V1",
+        "CERTIFICATION_INVALIDATION_V1",
+    ],
+    "docs/quality/AUDIT_CLEAN_ROOM_REALITY_V1.md": [
+        "CLEAN_ROOM_SESSION_V1",
+        "CONCURRENCY_REALITY_V1",
+        "PARTIAL_FAILURE_RECOVERY_V1",
+    ],
+    "docs/quality/AUDIT_ABSOLUTE_GATE_V1.md": [
+        "Certificação fail-closed máxima",
+        "Veredito calculado",
+        "APTO COM RESSALVAS",
+    ],
+    "docs/quality/AUDIT_CERTIFICATION_MANIFEST_TEMPLATE.json": [
+        "AUDIT_CERTIFICATION_MANIFEST_V1",
+        "unmapped_surfaces",
+        "blocked_external_count",
+    ],
+    "scripts/certify-audit-manifest.py": [
+        "2026-09-21-absolute-v5",
+        "AUDIT_VERDICT=",
+        "not_headless_only",
     ],
     "AGENTS.override.md": [
         "AUDIT_UNIVERSAL_COVERAGE_V1.md",
@@ -69,6 +115,8 @@ class AuditState:
     p0: int = 0
     p1: int = 0
     p2_critical: int = 0
+    p3: int = 0
+    open_defects: int = 0
     critical_not_validated: bool = False
     audit_escape_pending: bool = False
     critical_improvement_required: bool = False
@@ -92,6 +140,13 @@ class AuditState:
     architecture_material_not_validated: bool = False
     deployment_provenance_missing: bool = False
     production_runner_pure_ci_bottleneck: bool = False
+    browser_e2e_missing: bool = False
+    unmapped_surface: bool = False
+    untested_material_control: bool = False
+    evidence_debt: bool = False
+    contradictory_review_missing: bool = False
+    remediation_blocker: bool = False
+    clean_room_gap: bool = False
 
 
 def allows_apto(state: AuditState) -> bool:
@@ -101,6 +156,8 @@ def allows_apto(state: AuditState) -> bool:
             state.p0 > 0,
             state.p1 > 0,
             state.p2_critical > 0,
+            state.p3 > 0,
+            state.open_defects > 0,
             state.critical_not_validated,
             state.audit_escape_pending,
             state.critical_improvement_required,
@@ -124,6 +181,13 @@ def allows_apto(state: AuditState) -> bool:
             state.architecture_material_not_validated,
             state.deployment_provenance_missing,
             state.production_runner_pure_ci_bottleneck,
+            state.browser_e2e_missing,
+            state.unmapped_surface,
+            state.untested_material_control,
+            state.evidence_debt,
+            state.contradictory_review_missing,
+            state.remediation_blocker,
+            state.clean_room_gap,
         ]
     )
 
@@ -165,6 +229,8 @@ def self_test_gate() -> list[dict[str, object]]:
         "p0": {"p0": 1},
         "p1": {"p1": 1},
         "p2_critical": {"p2_critical": 1},
+        "p3": {"p3": 1},
+        "open_defects": {"open_defects": 1},
         "critical_not_validated": {"critical_not_validated": True},
         "audit_escape_pending": {"audit_escape_pending": True},
         "critical_improvement_required": {"critical_improvement_required": True},
@@ -188,6 +254,13 @@ def self_test_gate() -> list[dict[str, object]]:
         "architecture_material_not_validated": {"architecture_material_not_validated": True},
         "deployment_provenance_missing": {"deployment_provenance_missing": True},
         "production_runner_pure_ci_bottleneck": {"production_runner_pure_ci_bottleneck": True},
+        "browser_e2e_missing": {"browser_e2e_missing": True},
+        "unmapped_surface": {"unmapped_surface": True},
+        "untested_material_control": {"untested_material_control": True},
+        "evidence_debt": {"evidence_debt": True},
+        "contradictory_review_missing": {"contradictory_review_missing": True},
+        "remediation_blocker": {"remediation_blocker": True},
+        "clean_room_gap": {"clean_room_gap": True},
     }
     for name, mutation in blockers.items():
         state = replace(baseline, **mutation)
@@ -216,7 +289,7 @@ def write_report(output_dir: Path, marker_results: list[dict[str, object]], gate
     output_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema": "AUDIT_SELF_TEST_V1",
-        "policy_version": "2026-09-19-universal-architecture-v5",
+        "policy_version": "2026-09-21-absolute-v5",
         "marker_results": marker_results,
         "gate_results": gate_results,
     }
