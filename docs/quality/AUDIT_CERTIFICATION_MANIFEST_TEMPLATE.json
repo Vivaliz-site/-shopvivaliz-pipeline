@@ -1,0 +1,145 @@
+{
+  "schema": "AUDIT_CERTIFICATION_MANIFEST_V1",
+  "identity": {
+    "audit_id": "",
+    "repository": "",
+    "commit_sha": "",
+    "build_digest": "",
+    "release": "",
+    "environment": "",
+    "timestamp_utc": "",
+    "certified_scope": "",
+    "scope_is_explicit": false,
+    "primary_auditor": ""
+  },
+  "fingerprint": {
+    "schema_version": "",
+    "config_fingerprint": "",
+    "feature_flags_fingerprint": "",
+    "provider_versions": {}
+  },
+  "evidence": {
+    "fresh": false,
+    "same_sha_build": false,
+    "same_environment": false,
+    "provenance_complete": false,
+    "debt_count": 0,
+    "artifacts": [
+      {
+        "id": "",
+        "path": "",
+        "sha256": "",
+        "kind": "trace|video|screenshot|log|report"
+      }
+    ]
+  },
+  "coverage": {
+    "inventory_complete": false,
+    "all_material_journeys_enumerated": false,
+    "all_material_states_enumerated": false,
+    "negative_paths_complete": false,
+    "boundaries_complete": false,
+    "environment_matrix_complete": false,
+    "not_validated_count": 0,
+    "routes_discovered": 0,
+    "interactive_controls_discovered": 0,
+    "material_journeys": 0,
+    "covered_controls": 0,
+    "unmapped_surfaces": 0,
+    "untested_material_controls": 0
+  },
+  "taxonomy": {
+    "complete": false,
+    "no_material_not_validated": false
+  },
+  "browser": {
+    "required": false,
+    "real_browser": false,
+    "graphical_session": false,
+    "agent_executed": false,
+    "same_release": false,
+    "full_user_path": false,
+    "reload_revisit": false,
+    "persistence_checked": false,
+    "console_checked": false,
+    "network_checked": false,
+    "visual_evidence": false,
+    "no_user_delegation": false,
+    "not_headless_only": false
+  },
+  "data": {
+    "reconciliation_complete": false,
+    "orphan_scan_complete": false,
+    "no_unexplained_difference": false
+  },
+  "runtime": {
+    "no_unresolved_5xx": false,
+    "no_unresolved_pageerror": false,
+    "no_unresolved_requestfailed": false,
+    "no_unresolved_console_error": false,
+    "no_silent_failure": false
+  },
+  "external_effects": {
+    "reconciled": false
+  },
+  "async_runtime": {
+    "observed": false
+  },
+  "observability": {
+    "proven": false
+  },
+  "recovery": {
+    "proven_or_not_material": false
+  },
+  "architecture": {
+    "complete": false
+  },
+  "legacy_duplication": {
+    "checked": false
+  },
+  "baseline": {
+    "acceptable_or_not_material": false
+  },
+  "tests": {
+    "no_flaky_false_green": false,
+    "self_test_complete_when_applicable": false
+  },
+  "unknown_unknowns": {
+    "completed": false
+  },
+  "audit_escape": {
+    "pending_count": 0,
+    "historical_classes_reaudited": false,
+    "regression_tests_added_for_new_escapes": false
+  },
+  "contradictory_review": {
+    "completed": false,
+    "reviewer_distinct": false,
+    "no_open_findings": false,
+    "reviewer": ""
+  },
+  "remediation": {
+    "loop_completed": false,
+    "no_gate_weakening": false,
+    "open_blockers": 0,
+    "executable_blockers": 0,
+    "blocked_external_count": 0
+  },
+  "findings": {
+    "p0": 0,
+    "p1": 0,
+    "p2": 0,
+    "p3": 0,
+    "open_defects_total": 0,
+    "improvement_required_open": 0,
+    "preexisting_active_defects": 0
+  },
+  "deploy": {
+    "required": false,
+    "same_sha_active": false,
+    "post_deploy_validation_complete": false,
+    "post_deploy_browser_e2e_complete": false,
+    "post_deploy_async_observation_complete": false
+  },
+  "journeys": []
+}
