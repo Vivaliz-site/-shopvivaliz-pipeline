@@ -106,6 +106,11 @@ REQUIRED_MARKERS = {
     "AGENTS.override.md": [
         "AUDIT_UNIVERSAL_COVERAGE_V1.md",
         "AUDIT_SELF_TEST_V1.md",
+    ],,
+    ".github/workflows/absolute-audit-governance.yml": [
+        "Self-test absolute certifier",
+        "Self-test audit governance",
+        "Verify global policy parity",
     ],
 }
 
@@ -204,9 +209,9 @@ def validate_markers() -> list[dict[str, object]]:
         results.append({"file": relative, "ok": not missing, "missing": missing})
 
     optional_entrypoints = {
-        "AGENTS.md": "ARCHITECTURE_DEPLOY_AUDIT_V1.md",
-        "CLAUDE.md": "ARCHITECTURE_DEPLOY_AUDIT_V1.md",
-        "REGRAS-AGENTES-CENTRALIZADAS.md": "AUDITORIA_EXTREMA_UNIVERSAL_V4",
+        "AGENTS.md": "AUDIT_ABSOLUTE_GATE_V1.md",
+        "CLAUDE.md": "AUDIT_ABSOLUTE_GATE_V1.md",
+        "REGRAS-AGENTES-CENTRALIZADAS.md": "AUDITORIA_EXTREMA_ABSOLUTA_V5",
     }
     for relative, marker in optional_entrypoints.items():
         path = ROOT / relative
