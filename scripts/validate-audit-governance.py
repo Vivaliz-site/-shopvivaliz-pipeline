@@ -21,6 +21,7 @@ REQUIRED_MARKERS = {
         "ARCHITECTURE_DEPLOY_AUDIT_V1",
         "AUDIT_ABSOLUTE_GATE_V1",
         "AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1",
+        "AUDIT_MERGE_ENFORCEMENT_V1",
         "AUDIT_PROJECT_REQUIREMENTS_V1",
     ],
     "docs/quality/EXTREME_AUDIT_PROTOCOL.md": [
@@ -28,6 +29,7 @@ REQUIRED_MARKERS = {
         "Caça a unknown unknowns",
         "AUDIT_BROWSER_E2E_REAL_V1",
         "AUDIT_APTO_REMEDIATION_LOOP_V1",
+        "AUDIT_MERGE_ENFORCEMENT_V1",
     ],
     "docs/quality/AUDIT_RUNTIME_PARITY_V1.md": [
         "Falha silenciosa",
@@ -110,6 +112,27 @@ REQUIRED_MARKERS = {
         "Invariantes locais machine-readable",
         "provider_chat",
         "Requisito local ausente",
+    ],,
+    "docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md": [
+        "Enforcement de merge",
+        "Governance bridge obrigatório",
+        "Main Guard",
+        "ENFORCEMENT_PLATFORM_LIMITATION",
+    ],
+    "scripts/absolute-audit-governance-validate.sh": [
+        "ABSOLUTE_AUDIT_GOVERNANCE_BRIDGE=PASS",
+        "test_certify_audit_manifest.py",
+        "validate-global-audit-policy.py",
+    ],
+    "scripts/validate-main-merge-provenance.py": [
+        "AUDIT_MAIN_PROVENANCE=",
+        "no associated pull request",
+        "merged pull request",
+    ],
+    ".github/workflows/absolute-audit-main-guard.yml": [
+        "Absolute Audit Main Guard",
+        "Validate Absolute Audit V5 on published main",
+        "Verify merged-PR provenance",
     ],
     "docs/quality/AUDIT_CERTIFICATION_MANIFEST_TEMPLATE.json": [
         "AUDIT_CERTIFICATION_MANIFEST_V1",
@@ -187,6 +210,7 @@ class AuditState:
     clean_room_gap: bool = False
     auth_discovery_gap: bool = False
     project_invariant_gap: bool = False
+    merge_enforcement_gap: bool = False
 
 
 def allows_apto(state: AuditState) -> bool:
@@ -228,6 +252,7 @@ def allows_apto(state: AuditState) -> bool:
             state.clean_room_gap,
             state.auth_discovery_gap,
             state.project_invariant_gap,
+            state.merge_enforcement_gap,
         ]
     )
 
@@ -343,6 +368,7 @@ def self_test_gate() -> list[dict[str, object]]:
         "clean_room_gap": {"clean_room_gap": True},
         "auth_discovery_gap": {"auth_discovery_gap": True},
         "project_invariant_gap": {"project_invariant_gap": True},
+        "merge_enforcement_gap": {"merge_enforcement_gap": True},
     }
 
     for name, mutation in blockers.items():
