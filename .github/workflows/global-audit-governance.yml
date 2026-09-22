@@ -1,0 +1,52 @@
+name: Global Audit Governance Fleet
+
+on:
+  pull_request:
+    paths:
+      - 'docs/quality/GLOBAL_AUDIT_MANIFEST.json'
+      - 'scripts/verify-global-audit-governance.py'
+      - '.github/workflows/global-audit-governance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/quality/GLOBAL_AUDIT_MANIFEST.json'
+      - 'scripts/verify-global-audit-governance.py'
+      - '.github/workflows/global-audit-governance.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '23 7 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: global-audit-governance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fleet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify global governance parity
+        env:
+          AUDIT_FLEET_SELF_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$GH_TOKEN"
+          python3 scripts/verify-global-audit-governance.py --output-dir artifacts/global-audit-governance
+      - name: Upload fleet evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: global-audit-governance-${{ github.run_id }}
+          path: artifacts/global-audit-governance/
+          if-no-files-found: error
+          retention-days: 90
