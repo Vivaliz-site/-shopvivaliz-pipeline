@@ -35,6 +35,15 @@ Toda certificação deve nomear exatamente o que cobre. É proibido usar “sist
 
 Se o pedido for auditoria integral do projeto, o inventário deve abranger todas as superfícies materiais descobertas, inclusive legado ainda executável.
 
+## Invariantes locais obrigatórios
+
+Cada repositório deve possuir `docs/quality/AUDIT_PROJECT_REQUIREMENTS.json`. O certifier carrega esse arquivo e exige todos os invariantes listados; requisito local omitido do manifesto bloqueia `APTO`.
+
+Para requisitos `provider_chat`, cada provider declarado deve estar ativo, produzir resposta não vazia e aparecer visivelmente no mesmo ciclo de UI; todas as fases declaradas também devem completar. Health/configuração não substituem resposta real.
+
+## Auth/login não vira bloqueio cedo
+
+Se o bloqueio alegado for login, OAuth, sessão ou credencial, aplique `AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1`. `BLOCKED_EXTERNAL` é inválido até 100% dos repositórios governados e fontes/sessões/transportes canônicos serem verificados com probes seguros, sem exposição de secrets.
 ## Independência e contraditório
 
 Jornada crítica exige reauditoria contraditória por revisor/agente distinto. O segundo revisor recebe o escopo, release e evidências necessárias, mas deve tentar falsificar a conclusão e procurar novas classes de falha.
