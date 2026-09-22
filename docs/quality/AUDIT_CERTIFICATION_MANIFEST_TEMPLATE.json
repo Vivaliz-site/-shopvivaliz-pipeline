@@ -162,7 +162,8 @@
     "open_blockers": 0,
     "executable_blockers": 0,
     "blocked_external_count": 0,
-    "blocked_external_proven": false
+    "blocked_external_proven": false,
+    "blocked_external_category": ""
   },
   "findings": {
     "p0": 0,
@@ -185,5 +186,29 @@
     "scope_label_exact": false,
     "no_self_attestation": false
   },
-  "journeys": []
+  "journeys": [],
+  "auth_discovery": {
+    "required": false,
+    "complete_or_not_material": false,
+    "repositories_expected": [],
+    "repositories_scanned": [],
+    "repositories_expected_count": 0,
+    "repositories_scanned_count": 0,
+    "all_repositories_scanned": false,
+    "repo_secret_references_checked": false,
+    "runtime_secret_stores_checked": false,
+    "canonical_profiles_checked": false,
+    "oauth_cli_sessions_checked": false,
+    "alternative_transports_checked": false,
+    "safe_probe_attempted": false,
+    "exhausted": false,
+    "no_secret_exposure": false
+  },
+  "project_invariants": {
+    "complete": false,
+    "requirements_fingerprint": "",
+    "failed_required_count": 0,
+    "missing_required_count": 0,
+    "results": []
+  }
 }
