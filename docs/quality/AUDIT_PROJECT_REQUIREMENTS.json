@@ -1,0 +1,25 @@
+{
+  "schema": "AUDIT_PROJECT_REQUIREMENTS_V1",
+  "project": "Vivaliz-site/-shopvivaliz-pipeline",
+  "policy_version": "2026-09-21-absolute-v5",
+  "required_invariants": [
+    {
+      "id": "PIPELINE_GLOBAL_POLICY_PARITY_V1",
+      "type": "evidence",
+      "description": "Global audit policy parity must pass across governed repositories."
+    },
+    {
+      "id": "PIPELINE_FUNCTIONAL_EXECUTION_V1",
+      "type": "journey_ids",
+      "description": "The pipeline must have a real functional execution journey, not only governance checks.",
+      "required_journey_ids": [
+        "pipeline-functional-execution"
+      ]
+    },
+    {
+      "id": "PIPELINE_REPOSITORY_PROPAGATION_V1",
+      "type": "evidence",
+      "description": "Absolute audit governance must be propagated and validated in every governed repository."
+    }
+  ]
+}
