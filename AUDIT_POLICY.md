@@ -21,6 +21,8 @@ Toda auditoria formal deve executar como conjunto obrigatório:
 - `docs/quality/AUDIT_APTO_REMEDIATION_LOOP_V1.md`;
 - `docs/quality/AUDIT_ESCAPE_INVALIDATION_V1.md`;
 - `docs/quality/AUDIT_ABSOLUTE_GATE_V1.md`;
+- `docs/quality/AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1.md`;
+- `docs/quality/AUDIT_PROJECT_REQUIREMENTS_V1.md` e `docs/quality/AUDIT_PROJECT_REQUIREMENTS.json` local;
 - `docs/quality/AUDIT_OVERLAY.md`.
 
 Nenhum desses documentos isoladamente substitui os demais.
@@ -34,6 +36,8 @@ O agente não pode autoatribuir `APTO`. O veredito final deve ser calculado por 
 No modo absoluto, `APTO COM RESSALVAS` é proibido. O encerramento permitido é somente `APTO` ou `BLOCKED_EXTERNAL`, sendo este último restrito a bloqueio externo real, provado e incontornável com as autorizações/ferramentas disponíveis. Complexidade, duração, quantidade de defeitos, teste manual, limite de subagente ou “pré-existente” não são bloqueios externos.
 
 `APTO` exige zero P0/P1/P2/P3 abertos, zero `DEFECT` aberto, zero `IMPROVEMENT_REQUIRED` aberto, zero `AUDIT_ESCAPE` pendente, zero bloqueador executável, zero superfície/jornada/controle material não mapeado ou não testado e zero dívida de evidência material. P4 `IMPROVEMENT_OPTIONAL` só pode permanecer se não representar risco material, prevenção de recorrência, observabilidade, recuperação, integridade, segurança ou confiabilidade operacional.
+
+Antes de qualquer `BLOCKED_EXTERNAL` por login, sessão, OAuth ou credencial, execute `AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1`: cubra 100% dos repositórios governados, perfis/sessões canônicos, referências de secret stores/runtime e transportes permitidos, sem jamais expor valores. Cada repositório também deve manter `docs/quality/AUDIT_PROJECT_REQUIREMENTS.json`; todos os invariantes locais são gates obrigatórios do certifier.
 
 
 É proibido declarar `APTO` com fluxo crítico validado apenas localmente ou apenas por carregamento de página/healthcheck. Quando houver UI, operações críticas e mutações devem ser executadas pela UI real contra o mesmo release/ambiente certificado, com reload/revisita e confirmação da persistência/efeito. Quando não houver UI, use a interface operacional canônica publicada.
