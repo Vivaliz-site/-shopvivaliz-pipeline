@@ -151,6 +151,8 @@ REQUIRED_MARKERS = {
         "AUDIT_ABSOLUTE_GATE_V1.md",
         "AUDIT_BROWSER_E2E_REAL_V1.md",
         "certify-audit-manifest.py",
+        "AUDIT_MERGE_ENFORCEMENT_V1.md",
+        "absolute-audit-governance-validate.sh",
     ],
     ".github/workflows/absolute-audit-governance.yml": [
         "Self-test absolute certifier",
