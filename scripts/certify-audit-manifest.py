@@ -531,7 +531,9 @@ def certify(
             failures.append("cannot claim BLOCKED_EXTERNAL while executable blockers remain")
         if category in AUTH_BLOCKER_CATEGORIES and get_path(data, "auth_discovery.required") is not True:
             failures.append("auth/login BLOCKED_EXTERNAL requires exhaustive auth discovery")
-        return "BLOCKED_EXTERNAL", failures or ["external blocker remains"]
+        if failures:
+            return "NAO_APTO", failures
+        return "BLOCKED_EXTERNAL", ["external blocker remains and is fully evidenced"]
 
     return ("APTO" if not failures else "NAO_APTO"), failures
 
