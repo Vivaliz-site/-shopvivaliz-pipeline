@@ -8,7 +8,7 @@ Atue sob três lentes obrigatórias: **Auditor** (conformidade, segurança, inte
 - Classifique evidência como `COMPROVADO`, `FORTE EVIDÊNCIA`, `HIPÓTESE A VALIDAR` ou `NÃO VALIDADO`.
 - Tente refutar achados relevantes antes de registrá-los e tente quebrar áreas consideradas corretas.
 - Este protocolo é piso mínimo, nunca teto.
-- Execute também `AUDIT_RUNTIME_PARITY_V1`, `AUDIT_UNIVERSAL_COVERAGE_V1`, `ARCHITECTURE_DEPLOY_AUDIT_V1`, `AUDIT_BROWSER_E2E_REAL_V1` quando houver UI, `AUDIT_JOURNEY_INVENTORY_V1`, `AUDIT_CLEAN_ROOM_REALITY_V1`, `AUDIT_HARDENING_MAX_V1`, `AUDIT_APTO_REMEDIATION_LOOP_V1`, `AUDIT_ESCAPE_INVALIDATION_V1`, `AUDIT_ABSOLUTE_GATE_V1`, o overlay do projeto e `AUDIT_SELF_TEST_V1` quando aplicável.
+- Execute também `AUDIT_RUNTIME_PARITY_V1`, `AUDIT_UNIVERSAL_COVERAGE_V1`, `ARCHITECTURE_DEPLOY_AUDIT_V1`, `AUDIT_BROWSER_E2E_REAL_V1` quando houver UI, `AUDIT_JOURNEY_INVENTORY_V1`, `AUDIT_CLEAN_ROOM_REALITY_V1`, `AUDIT_HARDENING_MAX_V1`, `AUDIT_APTO_REMEDIATION_LOOP_V1`, `AUDIT_ESCAPE_INVALIDATION_V1`, `AUDIT_ABSOLUTE_GATE_V1`, `AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1`, `AUDIT_PROJECT_REQUIREMENTS_V1` + o `AUDIT_PROJECT_REQUIREMENTS.json` local, o overlay do projeto e `AUDIT_SELF_TEST_V1` quando aplicável.
 - A taxonomia de erros nunca é lista fechada: toda auditoria deve reservar investigação exploratória para falhas não previstas.
 
 ## Reconstrução do sistema real
@@ -103,6 +103,10 @@ Antes disso, execute `AUDIT_JOURNEY_INVENTORY_V1` para descobrir rotas, controle
 
 Execute também `AUDIT_CLEAN_ROOM_REALITY_V1` para sessão limpa, cache/PWA, auth expirada, deep-link/back/refresh, mobile/desktop, browser alternativo quando material, concorrência, falha parcial, cold start, tempo e soak/leak.
 
+## Auth e invariantes locais
+Antes de classificar login/OAuth/sessão/credencial como `BLOCKED_EXTERNAL`, execute `AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1` em 100% dos repositórios governados e nas fontes/sessões/transportes canônicos referenciados por eles, sem expor secrets.
+
+Carregue `docs/quality/AUDIT_PROJECT_REQUIREMENTS.json` e comprove todos os invariantes locais. Omissão de requisito do domínio bloqueia `APTO`; requisitos `provider_chat` exigem respostas reais e visíveis dos providers declarados no mesmo ciclo.
 ## Certificação absoluta e integridade de evidência
 Aplique `AUDIT_HARDENING_MAX_V1` e `AUDIT_ABSOLUTE_GATE_V1`: fingerprint de release/config/schema/providers; dupla confirmação UI + oracle independente; matriz role/tenant/estado; chaos/recovery seguro; settlement assíncrono; hashes SHA-256 dos artefatos; invalidação automática por mudança material; revisor contraditório distinto; nenhuma autoatestação sem referência de evidência.
 ## Gate Final de Completude
