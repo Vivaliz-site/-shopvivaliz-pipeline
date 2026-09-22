@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 root="$(git rev-parse --show-toplevel)"; cd "$root"
+bash scripts/absolute-audit-governance-validate.sh "${1:-manual}"
 python_bin="${PYTHON_BIN:-}"
 if [ -z "$python_bin" ]; then
   if command -v python3 >/dev/null 2>&1; then python_bin=python3; else python_bin=python; fi
