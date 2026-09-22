@@ -166,10 +166,17 @@ REQUIRED_ENTRYPOINT_MARKERS = {
         "AUDIT_ABSOLUTE_GATE_V1.md",
         "AUDIT_BROWSER_E2E_REAL_V1.md",
         "AUDIT_APTO_REMEDIATION_LOOP_V1.md",
+        "AUDIT_MERGE_ENFORCEMENT_V1",
     ],
     "CLAUDE.md": [
         "AUDIT_ABSOLUTE_GATE_V1.md",
         "AUDIT_BROWSER_E2E_REAL_V1.md",
+    ],
+    "scripts/repository-governance-validate.sh": [
+        "absolute-audit-governance-validate.sh",
+    ],
+    ".github/workflows/repository-governance.yml": [
+        "repository-governance-validate.sh",
     ],
 }
 
