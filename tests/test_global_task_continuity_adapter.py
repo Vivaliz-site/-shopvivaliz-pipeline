@@ -11,9 +11,9 @@ def load_adapter():
 class GlobalTaskContinuityAdapterTests(unittest.TestCase):
     def setUp(self): self.mod=load_adapter()
     def test_repository_identity_is_pinned(self): self.assertEqual(self.mod.REPOSITORY, "Vivaliz-site/-shopvivaliz-pipeline")
-    def test_adapter_targets_canonical_runtime(self):
-        self.assertEqual(str(self.mod.DEFAULT_CONTROLLER), "/home/ubuntu/shopvivaliz-deploy/current/scripts/agent_task_state.py")
-        self.assertEqual(str(self.mod.DEFAULT_RUNTIME_DIR), "/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state")
+    def test_requires_controller_injection(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(self.mod.controller_path().is_file())
     def test_environment_stamps_repository(self):
         env=self.mod.build_controller_env({"PATH":"/usr/bin"})
         self.assertEqual(env["SHOPVIVALIZ_TASK_REPOSITORY"], "Vivaliz-site/-shopvivaliz-pipeline")
