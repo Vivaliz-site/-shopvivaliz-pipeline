@@ -9,8 +9,7 @@ on:
         default: '100'
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 jobs:
   run:
@@ -23,6 +22,8 @@ jobs:
     steps:
       - name: Checkout pipeline repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Checkout Shopvivaliz-site
         # Full read/write access to Shopvivaliz-site so pipeline steps can
@@ -31,6 +32,7 @@ jobs:
         with:
           repository: Vivaliz-site/site-shopvivaliz
           token: ${{ secrets.GH_PAT }}
+          persist-credentials: false
           path: shopvivaliz-site
 
       - uses: actions/setup-python@v5
