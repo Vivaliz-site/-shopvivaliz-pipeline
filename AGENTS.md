@@ -43,3 +43,8 @@ Antes de qualquer acao material, leia e cumpra EXECUTION-PROVENANCE-POLICY.md. T
 <!-- BROWSER_SESSION_POLICY_V1 -->
 ## Navegador: VM canônica e cleanup obrigatório
 Para browser interativo/remoto, use a VM backend canônica e a sessão gráfica prevista pela política global; não pergunte por host nem faça fallback para Windows. Sessões transitórias devem ter ownership + TTL e cleanup ao final. Em Auditoria Extrema, headless-only nunca certifica E2E quando UI real está disponível. Leia `AUDIT_BROWSER_E2E_REAL_V1.md`.
+
+<!-- GLOBAL_TASK_CONTINUITY_V8 -->
+## Global task continuity V8
+Tasks that can mutate code, infrastructure, data, CI, or deployment must use `python3 scripts/agent_task_state.py` to persist a durable checkpoint before substantive work and after material progress. This repository is pinned as `repository=Vivaliz-site/-shopvivaliz-pipeline`. Recoverable failures remain RUNNING; only fresh verification permits CONCLUIDO. The adapter fails closed if the canonical A1 controller is unavailable. Detached recovery does not reopen the same ChatGPT conversation. Background recovery remains Gemini-only; Codex is never an automatic fallback and remains the last explicit option.
+<!-- /GLOBAL_TASK_CONTINUITY_V8 -->
