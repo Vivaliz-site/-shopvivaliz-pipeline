@@ -53,7 +53,8 @@
       "AUDIT_MERGE_ENFORCEMENT_V1.md",
       "AUDIT_PROJECT_REQUIREMENTS_V1.md",
       "absolute-audit-governance-validate.sh",
-      "Absolute Audit Main Guard"
+      "Absolute Audit Main Guard",
+      "AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1"
     ],
     "CLAUDE.md": [
       "AGENTS.md",
@@ -61,7 +62,8 @@
       "AUDIT_BROWSER_E2E_REAL_V1.md",
       "AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1.md",
       "AUDIT_MERGE_ENFORCEMENT_V1.md",
-      "AUDIT_PROJECT_REQUIREMENTS_V1.md"
+      "AUDIT_PROJECT_REQUIREMENTS_V1.md",
+      "AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1"
     ],
     "GEMINI.md": [
       "GEMINI_READ_AGENTS_FIRST_V1",
