@@ -67,17 +67,21 @@ def _load_json(path):
 
 
 def _check_playwright_trace(path):
+    """Check actual Playwright trace structure and paired navigation/interaction/revisit."""
     if not zipfile.is_zipfile(path):
         return False
     try:
         with zipfile.ZipFile(path) as archive:
-            entries = [x for x in archive.namelist() if x.endswith(".trace")]
-            if not entries:
+            names = archive.namelist()
+            trace_names = [x for x in names if x.endswith(".trace")]
+            if not trace_names or not any(x.endswith(".network") for x in names):
                 return False
-            for name in entries:
+            if not any(x.startswith("resources/") or "/resources/" in x for x in names):
+                return False
+            for name in trace_names:
                 if archive.getinfo(name).file_size > 40 * 1024 * 1024:
                     continue
-                before, after, actions = set(), set(), 0
+                before, after = {}, set()
                 with archive.open(name) as handle:
                     for line in handle:
                         try:
@@ -88,13 +92,20 @@ def _check_playwright_trace(path):
                             continue
                         call_id = event.get("callId")
                         if event.get("type") == "before" and call_id:
-                            before.add(call_id)
-                            api = str(event.get("apiName", "")).lower()
-                            if any(a in api for a in (".click", ".fill", ".press", ".goto", ".check", ".select")):
-                                actions += 1
+                            before[call_id] = str(event.get("apiName", "")).lower()
                         elif event.get("type") == "after" and call_id:
                             after.add(call_id)
-                if (before & after) and actions >= 1:
+                nav = interaction = revisit = 0
+                for call_id, api in before.items():
+                    if call_id not in after:
+                        continue
+                    if ".goto" in api or ".navigate" in api:
+                        nav += 1
+                    elif ".reload" in api:
+                        revisit += 1
+                    elif any(x in api for x in (".click", ".fill", ".press", ".check", ".select")):
+                        interaction += 1
+                if nav >= 1 and interaction >= 1 and (revisit >= 1 or nav >= 2):
                     return True
     except (OSError, ValueError, zipfile.BadZipFile):
         return False
@@ -220,6 +231,8 @@ def validate_bundle(data: dict, evidence_root: Path) -> list[str]:
 
     seen_controls = set()
     case_ids = set()
+    seen_case_ids = set()
+    used_media_refs = {}
     if stateful_cases:
         case_inventory = document(data.get("case_coverage", {}).get("inventory_ref"), "case_inventory")
         if case_inventory is not None:
@@ -269,6 +282,16 @@ def validate_bundle(data: dict, evidence_root: Path) -> list[str]:
             failures.append(f"{role} UI execution lacks visual media")
         else:
             media_kinds = {artifacts.get(r, {}).get("kind") for r in media if r in paths}
+            for media_ref in media:
+                artifact = artifacts.get(media_ref, {})
+                if media_ref not in paths or artifact.get("kind") not in ("playwright_trace", "screenshot", "video"):
+                    failures.append(f"{role} media ref {media_ref!r} does not point to verified media")
+                    continue
+                if artifact.get("session_id") != log.get("session_id") or artifact.get("capture_auditor") != log.get("auditor"):
+                    failures.append(f"{role} media ref {media_ref!r} does not belong to recording session/auditor")
+                prior = used_media_refs.setdefault(media_ref, (journey_id, role))
+                if prior != (journey_id, role):
+                    failures.append(f"UI media replay detected: {media_ref!r} reused by {prior} and {(journey_id, role)}")
             if not ("playwright_trace" in media_kinds or "video" in media_kinds):
                 failures.append(f"{role} UI execution lacks verified real browser trace or video")
             if not ("screenshot" in media_kinds or "video" in media_kinds):
@@ -291,7 +314,7 @@ def validate_bundle(data: dict, evidence_root: Path) -> list[str]:
                 seen_ids = set(values)
                 if not seen_ids.issubset(case_ids):
                     failures.append(f"journey {jid} exercised case absent from inventory")
-                case_ids.difference_update(seen_ids)
+                seen_case_ids.update(seen_ids)
             else:
                 failures.append(f"journey {jid} lacks real case-by-case IDs")
         if deploy.get("required") is True:
@@ -305,8 +328,8 @@ def validate_bundle(data: dict, evidence_root: Path) -> list[str]:
 
     if controls and controls != seen_controls:
         failures.append(f"UI controls not exercised by real captured journeys: {len(controls - seen_controls)}")
-    if stateful_cases and case_ids:
-        failures.append(f"real cases not exercised case-by-case in UI: {len(case_ids)}")
+    if stateful_cases and (case_ids - seen_case_ids):
+        failures.append(f"real cases not exercised case-by-case in UI: {len(case_ids - seen_case_ids)}")
 
     total = findings.get("discovered_total")
     fixes = remediation.get("fixed_findings")
