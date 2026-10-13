@@ -25,7 +25,7 @@ CAPTURED = "2026-10-13T14:04:00Z"
 EVENTS = [{"action": action, "control_id": "button-save" if action == "interact" else ""} for action in gate.UI_ACTIONS]
 
 
-def capture(auditor, session, captured=CAPTURED, cases=None):
+def capture(auditor, session, captured=CAPTURED, cases=None, media_refs=None):
     return {
         "schema": gate.UI_EXECUTION_SCHEMA,
         "sha_release_environment": IDENTITY,
@@ -35,19 +35,21 @@ def capture(auditor, session, captured=CAPTURED, cases=None):
         "captured_at_utc": captured,
         "events": copy.deepcopy(EVENTS),
         "interacted_control_ids": ["button-save"],
-        "media_refs": ["trace", "screenshot"],
+        "media_refs": list(media_refs or ["trace", "screenshot"]),
         "case_sha256_ids": list(cases if cases is not None else [CASE]),
     }
 
 
 def playwright_trace_bytes():
-    content = "\n".join([
-        json.dumps({"type": "before", "callId": "1", "apiName": "Locator.click"}),
-        json.dumps({"type": "after", "callId": "1"}),
-    ]).encode()
+    events = []
+    for seq, action in enumerate(("Page.goto", "Locator.click", "Page.reload", "Page.goto"), 1):
+        events.append(json.dumps({"type": "before", "callId": str(seq), "apiName": action}))
+        events.append(json.dumps({"type": "after", "callId": str(seq)}))
     with io.BytesIO() as output:
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr("trace.trace", content)
+            archive.writestr("trace.trace", "\n".join(events) + "\n")
+            archive.writestr("trace.network", "{}\n")
+            archive.writestr("resources/snapshot", "captured page snapshot")
         return output.getvalue()
 
 
@@ -90,13 +92,23 @@ class RealEvidenceTests(unittest.TestCase):
             "schema": gate.CASE_INVENTORY_SCHEMA, "sha_release_environment": IDENTITY,
             "case_sha256_ids": [CASE],
         })
-        self.put("trace", "playwright_trace", playwright_trace_bytes(), suffix=".zip")
-        self.put("screenshot", "screenshot", b"\x89PNG\r\n\x1a\n" + b"actual image placeholder", suffix=".png")
+        media = [
+            ("trace", "screenshot", "auditor-a", "session-1"),
+            ("review_trace", "review_screenshot", "auditor-b", "session-2"),
+            ("post_trace", "post_screenshot", "auditor-a", "session-3"),
+        ]
+        for trace_id, screenshot_id, auditor, session in media:
+            self.put(trace_id, "playwright_trace", playwright_trace_bytes(), suffix=".zip",
+                     session_id=session, capture_auditor=auditor)
+            self.put(screenshot_id, "screenshot", b"\x89PNG\r\n\x1a\n" + b"actual image placeholder",
+                     suffix=".png", session_id=session, capture_auditor=auditor)
         self.put("primary", "ui_execution", capture("auditor-a", "session-1"))
-        self.put("review", "ui_execution", capture("auditor-b", "session-2"))
-        self.put("post", "ui_execution", capture("auditor-a", "session-3", captured="2026-10-13T14:05:00Z"))
+        self.put("review", "ui_execution", capture("auditor-b", "session-2",
+                 media_refs=["review_trace", "review_screenshot"]))
+        self.put("post", "ui_execution", capture("auditor-a", "session-3", captured="2026-10-13T14:05:00Z",
+                 media_refs=["post_trace", "post_screenshot"]))
 
-    def put(self, name, kind, content, suffix=".json"):
+    def put(self, name, kind, content, suffix=".json", session_id=None, capture_auditor=None):
         raw = (
             json.dumps(content, sort_keys=True).encode()
             if isinstance(content, (dict, list)) else content
@@ -109,6 +121,7 @@ class RealEvidenceTests(unittest.TestCase):
             "kind": kind,
             "sha256": hashlib.sha256(raw).hexdigest(),
             "sha_release_environment": IDENTITY,
+            **({"session_id": session_id, "capture_auditor": capture_auditor} if session_id else {}),
         })
 
     def verdict(self):
@@ -189,6 +202,31 @@ class RealEvidenceTests(unittest.TestCase):
             "reaudit_ref": "post",
         }]
         self.assertTrue(any("distinct verified RED/GREEN" in x for x in self.verdict()))
+
+    def test_reusing_other_auditor_trace_fails(self):
+        doc = self.root / "review.json"
+        value = capture("auditor-b", "session-2", media_refs=["trace", "screenshot"])
+        raw = json.dumps(value, sort_keys=True).encode()
+        doc.write_bytes(raw)
+        artifact = next(x for x in self.data["evidence"]["artifacts"] if x["id"] == "review")
+        artifact["sha256"] = hashlib.sha256(raw).hexdigest()
+        problems = self.verdict()
+        self.assertTrue(any("UI media replay detected" in x for x in problems))
+        self.assertTrue(any("recording session/auditor" in x for x in problems))
+
+    def test_single_click_trace_cannot_claim_full_e2e(self):
+        raw = io.BytesIO()
+        with zipfile.ZipFile(raw, "w") as archive:
+            archive.writestr("trace.trace", json.dumps(
+                {"type": "before", "callId": "1", "apiName": "Locator.click"}
+            ) + "\n" + json.dumps({"type": "after", "callId": "1"}) + "\n")
+            archive.writestr("trace.network", "{}")
+            archive.writestr("resources/snapshot", "x")
+        binary = raw.getvalue()
+        (self.root / "trace.zip").write_bytes(binary)
+        artifact = next(x for x in self.data["evidence"]["artifacts"] if x["id"] == "trace")
+        artifact["sha256"] = hashlib.sha256(binary).hexdigest()
+        self.assertTrue(any("Playwright" in x for x in self.verdict()))
 
     def test_no_ui_opt_out_requires_negative_inventory(self):
         self.data["browser"]["required"] = False
