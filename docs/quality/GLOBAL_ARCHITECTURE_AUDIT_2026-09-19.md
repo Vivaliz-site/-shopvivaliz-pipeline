@@ -1,3 +1,7 @@
+<!-- DECOMMISSIONED_SOURCE_SUPERSESSION_20261029 -->
+> **Aviso de versão:** esta auditoria foi realizada em 2026-09-19. As recomendações abaixo que mencionem `shopvivaliz-free-a1` referem-se a um host **excluído conforme confirmação do proprietário em 2026-10-29**. O site/deploy atual está em `marina-a1-4c24g` (OCI ESPOSA), backend em `always-free-arm-1787907847-26` (OCI PRINCIPAL). Os dados históricos permanecem como evidência; não executar comandos, locks, SSH ou cutover usando a origem. Ver `docs/AGENT-REMOTE-ACCESS.md` e a topologia do `main` de `site-shopvivaliz`.
+<!-- /DECOMMISSIONED_SOURCE_SUPERSESSION_20261029 -->
+
 # Auditoria Global de Arquitetura, Código e Deploy — 2026-09-19
 
 ## Escopo

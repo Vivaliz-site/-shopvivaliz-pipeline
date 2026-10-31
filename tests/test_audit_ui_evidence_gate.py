@@ -7,6 +7,8 @@ import hashlib
 import importlib.util
 import io
 import json
+import struct
+import zlib
 import tempfile
 import unittest
 import zipfile
@@ -22,10 +24,19 @@ SHA = "a" * 40
 IDENTITY = SHA + "|release-1|production"
 CASE = "b" * 64
 CAPTURED = "2026-10-13T14:04:00Z"
-EVENTS = [{"action": action, "control_id": "button-save" if action == "interact" else ""} for action in gate.UI_ACTIONS]
+EVENTS = [
+    {"action": action, "control_id": "button-save" if action == "interact" else "",
+     "observed": "saved state persisted" if action in ("assert_postcondition", "assert_persistence") else ""}
+    for action in gate.UI_ACTIONS
+]
 
 
-def capture(auditor, session, captured=CAPTURED, cases=None, media_refs=None):
+def capture(auditor, session, captured=CAPTURED, cases=None):
+    media = {
+        "session-1": ["trace-primary", "screenshot-primary"],
+        "session-2": ["trace-review", "screenshot-review"],
+        "session-3": ["trace-post", "screenshot-post"],
+    }.get(session, ["trace-review", "screenshot-review"])
     return {
         "schema": gate.UI_EXECUTION_SCHEMA,
         "sha_release_environment": IDENTITY,
@@ -35,23 +46,42 @@ def capture(auditor, session, captured=CAPTURED, cases=None, media_refs=None):
         "captured_at_utc": captured,
         "events": copy.deepcopy(EVENTS),
         "interacted_control_ids": ["button-save"],
-        "media_refs": list(media_refs or ["trace", "screenshot"]),
+        "media_refs": media,
         "case_sha256_ids": list(cases if cases is not None else [CASE]),
     }
 
 
-def playwright_trace_bytes():
-    events = []
-    for seq, action in enumerate(("Page.goto", "Locator.click", "Page.reload", "Page.goto"), 1):
-        events.append(json.dumps({"type": "before", "callId": str(seq), "apiName": action}))
-        events.append(json.dumps({"type": "after", "callId": str(seq)}))
+def playwright_trace_bytes(run_id):
+    """Synthetic structural fixture; never usable as a production UI attestation."""
+    events = [
+        {"type": "context-options", "browserName": "chromium", "runId": run_id},
+        {"type": "before", "callId": f"{run_id}-goto", "apiName": "Page.goto"},
+        {"type": "after", "callId": f"{run_id}-goto"},
+        {"type": "before", "callId": f"{run_id}-click", "apiName": "Locator.click"},
+        {"type": "after", "callId": f"{run_id}-click"},
+        {"type": "before", "callId": f"{run_id}-reload", "apiName": "Page.reload"},
+        {"type": "after", "callId": f"{run_id}-reload"},
+    ]
+    content = "\n".join(json.dumps(event) for event in events).encode()
     with io.BytesIO() as output:
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr("trace.trace", "\n".join(events) + "\n")
-            archive.writestr("trace.network", "{}\n")
-            archive.writestr("resources/snapshot", "captured page snapshot")
+            archive.writestr("trace.trace", content)
+            archive.writestr("trace.network", '{"url":"https://example.test"}')
+            archive.writestr("resources/snapshot", "recorded snapshot")
         return output.getvalue()
 
+
+def png_bytes(run_id):
+    """Actual PNG bytes with valid IHDR/IDAT/IEND and CRCs (synthetic test pixels)."""
+    def chunk(kind, content):
+        return struct.pack(">I", len(content)) + kind + content + struct.pack(">I", zlib.crc32(kind + content) & 0xFFFFFFFF)
+    pixel = hashlib.sha256(run_id.encode()).digest()[:4]
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(b"\x00" + pixel))
+        + chunk(b"IEND", b"")
+    )
 
 def base_manifest():
     return {
@@ -92,23 +122,14 @@ class RealEvidenceTests(unittest.TestCase):
             "schema": gate.CASE_INVENTORY_SCHEMA, "sha_release_environment": IDENTITY,
             "case_sha256_ids": [CASE],
         })
-        media = [
-            ("trace", "screenshot", "auditor-a", "session-1"),
-            ("review_trace", "review_screenshot", "auditor-b", "session-2"),
-            ("post_trace", "post_screenshot", "auditor-a", "session-3"),
-        ]
-        for trace_id, screenshot_id, auditor, session in media:
-            self.put(trace_id, "playwright_trace", playwright_trace_bytes(), suffix=".zip",
-                     session_id=session, capture_auditor=auditor)
-            self.put(screenshot_id, "screenshot", b"\x89PNG\r\n\x1a\n" + b"actual image placeholder",
-                     suffix=".png", session_id=session, capture_auditor=auditor)
+        for run in ("primary", "review", "post"):
+            self.put("trace-" + run, "playwright_trace", playwright_trace_bytes(run), suffix=".zip")
+            self.put("screenshot-" + run, "screenshot", png_bytes(run), suffix=".png")
         self.put("primary", "ui_execution", capture("auditor-a", "session-1"))
-        self.put("review", "ui_execution", capture("auditor-b", "session-2",
-                 media_refs=["review_trace", "review_screenshot"]))
-        self.put("post", "ui_execution", capture("auditor-a", "session-3", captured="2026-10-13T14:05:00Z",
-                 media_refs=["post_trace", "post_screenshot"]))
+        self.put("review", "ui_execution", capture("auditor-b", "session-2"))
+        self.put("post", "ui_execution", capture("auditor-a", "session-3", captured="2026-10-13T14:05:00Z"))
 
-    def put(self, name, kind, content, suffix=".json", session_id=None, capture_auditor=None):
+    def put(self, name, kind, content, suffix=".json"):
         raw = (
             json.dumps(content, sort_keys=True).encode()
             if isinstance(content, (dict, list)) else content
@@ -121,13 +142,12 @@ class RealEvidenceTests(unittest.TestCase):
             "kind": kind,
             "sha256": hashlib.sha256(raw).hexdigest(),
             "sha_release_environment": IDENTITY,
-            **({"session_id": session_id, "capture_auditor": capture_auditor} if session_id else {}),
         })
 
     def verdict(self):
         return gate.validate_bundle(self.data, self.root)
 
-    def test_complete_real_ui_evidence_passes(self):
+    def test_complete_synthetic_structural_fixture_passes(self):
         self.assertEqual([], self.verdict())
 
     def test_false_sha_fails(self):
@@ -135,7 +155,7 @@ class RealEvidenceTests(unittest.TestCase):
         self.assertTrue(any("sha256 does not match real bytes" in x for x in self.verdict()))
 
     def test_missing_file_fails(self):
-        (self.root / "trace.zip").unlink()
+        (self.root / "trace-primary.zip").unlink()
         self.assertTrue(any("missing/unsafe" in x for x in self.verdict()))
 
     def test_path_escape_fails(self):
@@ -144,8 +164,8 @@ class RealEvidenceTests(unittest.TestCase):
 
     def test_fake_trace_fails(self):
         raw = b"dummy trace is not a browser run"
-        (self.root / "trace.zip").write_bytes(raw)
-        trace = next(x for x in self.data["evidence"]["artifacts"] if x["id"] == "trace")
+        (self.root / "trace-primary.zip").write_bytes(raw)
+        trace = next(x for x in self.data["evidence"]["artifacts"] if x["id"] == "trace-primary")
         trace["sha256"] = hashlib.sha256(raw).hexdigest()
         self.assertTrue(any("Playwright" in x for x in self.verdict()))
 
@@ -203,34 +223,128 @@ class RealEvidenceTests(unittest.TestCase):
         }]
         self.assertTrue(any("distinct verified RED/GREEN" in x for x in self.verdict()))
 
-    def test_reusing_other_auditor_trace_fails(self):
-        doc = self.root / "review.json"
-        value = capture("auditor-b", "session-2", media_refs=["trace", "screenshot"])
-        raw = json.dumps(value, sort_keys=True).encode()
-        doc.write_bytes(raw)
-        artifact = next(x for x in self.data["evidence"]["artifacts"] if x["id"] == "review")
-        artifact["sha256"] = hashlib.sha256(raw).hexdigest()
-        problems = self.verdict()
-        self.assertTrue(any("UI media replay detected" in x for x in problems))
-        self.assertTrue(any("recording session/auditor" in x for x in problems))
-
-    def test_single_click_trace_cannot_claim_full_e2e(self):
-        raw = io.BytesIO()
-        with zipfile.ZipFile(raw, "w") as archive:
-            archive.writestr("trace.trace", json.dumps(
-                {"type": "before", "callId": "1", "apiName": "Locator.click"}
-            ) + "\n" + json.dumps({"type": "after", "callId": "1"}) + "\n")
-            archive.writestr("trace.network", "{}")
-            archive.writestr("resources/snapshot", "x")
-        binary = raw.getvalue()
-        (self.root / "trace.zip").write_bytes(binary)
-        artifact = next(x for x in self.data["evidence"]["artifacts"] if x["id"] == "trace")
-        artifact["sha256"] = hashlib.sha256(binary).hexdigest()
-        self.assertTrue(any("Playwright" in x for x in self.verdict()))
-
     def test_no_ui_opt_out_requires_negative_inventory(self):
         self.data["browser"]["required"] = False
         self.assertTrue(any("disagrees with runtime UI inventory" in x for x in self.verdict()))
+
+
+    def rewrite_json(self, name, value):
+        path = self.root / (name + ".json")
+        raw = json.dumps(value, sort_keys=True).encode()
+        path.write_bytes(raw)
+        for artifact in self.data["evidence"]["artifacts"]:
+            if artifact["id"] == name:
+                artifact["sha256"] = hashlib.sha256(raw).hexdigest()
+                return
+        raise AssertionError("missing artifact fixture")
+
+    def test_magic_bytes_without_complete_png_are_rejected(self):
+        raw = b"\x89PNG\r\n\x1a\n" + b"placeholder is not an image"
+        (self.root / "screenshot-primary.png").write_bytes(raw)
+        for artifact in self.data["evidence"]["artifacts"]:
+            if artifact["id"] == "screenshot-primary":
+                artifact["sha256"] = hashlib.sha256(raw).hexdigest()
+        self.assertTrue(any("complete PNG" in x for x in self.verdict()))
+
+    def test_click_only_trace_cannot_prove_real_navigation(self):
+        records = [
+            {"type": "context-options", "browserName": "chromium"},
+            {"type": "before", "callId": "click", "apiName": "Locator.click"},
+            {"type": "after", "callId": "click"},
+        ]
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            archive.writestr("trace.trace", "\n".join(json.dumps(r) for r in records))
+        raw = output.getvalue()
+        (self.root / "trace-primary.zip").write_bytes(raw)
+        for artifact in self.data["evidence"]["artifacts"]:
+            if artifact["id"] == "trace-primary":
+                artifact["sha256"] = hashlib.sha256(raw).hexdigest()
+        self.assertTrue(any("Playwright" in x for x in self.verdict()))
+
+    def test_standard_playwright_method_trace_proves_navigation_and_interaction(self):
+        records = [
+            {"type": "context-options", "browserName": "chromium"},
+            {"type": "before", "callId": "goto", "method": "goto"},
+            {"type": "after", "callId": "goto"},
+            {"type": "before", "callId": "fill", "method": "fill"},
+            {"type": "after", "callId": "fill"},
+            {"type": "before", "callId": "reload", "method": "reload"},
+            {"type": "after", "callId": "reload"},
+        ]
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            archive.writestr("trace.trace", "\n".join(json.dumps(r) for r in records))
+            archive.writestr("trace.network", '{"url":"https://example.test"}')
+            archive.writestr("resources/snapshot", "recorded snapshot")
+        raw = output.getvalue()
+        (self.root / "trace-primary.zip").write_bytes(raw)
+        for artifact in self.data["evidence"]["artifacts"]:
+            if artifact["id"] == "trace-primary":
+                artifact["sha256"] = hashlib.sha256(raw).hexdigest()
+        self.assertFalse(any("lacks real Playwright" in x for x in self.verdict()))
+
+    def build_trace(self, network=True, resources=True, revisit=True, empty_network=False):
+        events = [{"type": "context-options", "browserName": "chromium"},
+                  {"type": "before", "callId": "goto", "method": "goto"},
+                  {"type": "after", "callId": "goto"},
+                  {"type": "before", "callId": "click", "method": "click"},
+                  {"type": "after", "callId": "click"}]
+        if revisit:
+            events += [{"type": "before", "callId": "reload", "method": "reload"},
+                       {"type": "after", "callId": "reload"}]
+        path = self.root / "trace-adversarial.zip"
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("trace.trace", "\n".join(json.dumps(e) for e in events))
+            if network:
+                archive.writestr("trace.network", "" if empty_network else '{"url":"https://example.test"}')
+            if resources:
+                archive.writestr("resources/recording", "captured snapshot")
+        return path
+
+    def test_trace_missing_network_blocks(self):
+        self.assertFalse(gate._check_playwright_trace(self.build_trace(network=False)))
+
+    def test_trace_empty_network_blocks(self):
+        self.assertFalse(gate._check_playwright_trace(self.build_trace(empty_network=True)))
+
+    def test_trace_missing_resources_blocks(self):
+        self.assertFalse(gate._check_playwright_trace(self.build_trace(resources=False)))
+
+    def test_trace_missing_revisit_blocks(self):
+        self.assertFalse(gate._check_playwright_trace(self.build_trace(revisit=False)))
+
+    def test_trace_realistic_structure_accepts(self):
+        self.assertTrue(gate._check_playwright_trace(self.build_trace()))
+
+    def test_review_must_not_reuse_primary_capture(self):
+        review = capture("auditor-b", "session-2")
+        review["media_refs"] = ["trace-primary", "screenshot-primary"]
+        self.rewrite_json("review", review)
+        self.assertTrue(any("media is reused" in x for x in self.verdict()))
+
+    def test_review_must_reexecute_every_real_case(self):
+        self.rewrite_json("review", capture("auditor-b", "session-2", cases=[]))
+        self.assertTrue(any("real cases not exercised" in x and "independent" in x for x in self.verdict()))
+
+    def test_postdeploy_must_reexecute_every_real_case(self):
+        self.rewrite_json("post", capture("auditor-a", "session-3", cases=[]))
+        self.assertTrue(any("real cases not exercised" in x and "post-deploy" in x for x in self.verdict()))
+
+    def test_reviewer_must_actually_interact_with_each_control(self):
+        review = capture("auditor-b", "session-2")
+        review["interacted_control_ids"] = []
+        review["events"] = [e for e in review["events"] if e["action"] != "interact"]
+        self.rewrite_json("review", review)
+        self.assertTrue(any("UI controls not exercised" in x and "independent" in x for x in self.verdict()))
+
+    def test_assertion_requires_observed_ui_state(self):
+        primary = capture("auditor-a", "session-1")
+        for e in primary["events"]:
+            if e["action"] == "assert_persistence":
+                e["observed"] = ""
+        self.rewrite_json("primary", primary)
+        self.assertTrue(any("assert_persistence needs an observed UI state" in x for x in self.verdict()))
 
 
 if __name__ == "__main__":

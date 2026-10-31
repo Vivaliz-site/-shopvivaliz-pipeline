@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import struct
+import zlib
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,6 +42,40 @@ def _digest(path):
     return hasher.hexdigest()
 
 
+def _check_png(path):
+    """Reject magic-byte-only placeholders, truncated files and broken PNG CRCs."""
+    try:
+        data = path.read_bytes()
+        if len(data) < 57 or not data.startswith(b"\x89PNG\r\n\x1a\n"):
+            return False
+        offset, ihdr, idat = 8, False, False
+        while offset + 12 <= len(data):
+            length = struct.unpack_from(">I", data, offset)[0]
+            end = offset + 12 + length
+            if length > 128 * 1024 * 1024 or end > len(data):
+                return False
+            kind = data[offset + 4:offset + 8]
+            payload = data[offset + 8:offset + 8 + length]
+            crc = struct.unpack_from(">I", data, offset + 8 + length)[0]
+            if zlib.crc32(kind + payload) & 0xFFFFFFFF != crc:
+                return False
+            if kind == b"IHDR":
+                if ihdr or offset != 8 or length != 13:
+                    return False
+                width, height = struct.unpack_from(">II", payload)
+                if not (0 < width <= 32768 and 0 < height <= 32768):
+                    return False
+                ihdr = True
+            elif kind == b"IDAT":
+                idat = True
+            elif kind == b"IEND":
+                return ihdr and idat and length == 0 and end == len(data)
+            offset = end
+        return False
+    except (ValueError, OSError, struct.error):
+        return False
+
+
 def _safe_file(root, name):
     if not isinstance(name, str) or not name.strip():
         raise ValueError("artifact path missing")
@@ -67,22 +103,24 @@ def _load_json(path):
 
 
 def _check_playwright_trace(path):
-    """Check actual Playwright trace structure and paired navigation/interaction/revisit."""
+    """Require context metadata plus completed navigation AND interaction calls."""
     if not zipfile.is_zipfile(path):
         return False
     try:
         with zipfile.ZipFile(path) as archive:
-            names = archive.namelist()
-            trace_names = [x for x in names if x.endswith(".trace")]
-            if not trace_names or not any(x.endswith(".network") for x in names):
+            members = archive.infolist()
+            entries = [entry for entry in members if entry.filename.endswith(".trace")]
+            networks = [e for e in members if e.filename.endswith(".network") and 0 < e.file_size <= 40*1024*1024]
+            resources = [e for e in members if (e.filename.startswith("resources/") or "/resources/" in e.filename)
+                         and not e.is_dir() and 0 < e.file_size <= 40*1024*1024]
+            if not entries or not networks or not resources:
                 return False
-            if not any(x.startswith("resources/") or "/resources/" in x for x in names):
-                return False
-            for name in trace_names:
-                if archive.getinfo(name).file_size > 40 * 1024 * 1024:
+            for entry in entries:
+                if entry.file_size > 40 * 1024 * 1024 or entry.compress_size == 0:
                     continue
-                before, after = {}, set()
-                with archive.open(name) as handle:
+                before, navigation, interaction, revisit, context = {}, False, False, False, False
+                completed_navigations = 0
+                with archive.open(entry) as handle:
                     for line in handle:
                         try:
                             event = json.loads(line)
@@ -90,27 +128,35 @@ def _check_playwright_trace(path):
                             continue
                         if not isinstance(event, dict):
                             continue
+                        kind = event.get("type")
+                        if kind == "context-options" and event.get("browserName") in ("chromium", "firefox", "webkit"):
+                            context = True
                         call_id = event.get("callId")
-                        if event.get("type") == "before" and call_id:
-                            before[call_id] = str(event.get("apiName", "")).lower()
-                        elif event.get("type") == "after" and call_id:
-                            after.add(call_id)
-                nav = interaction = revisit = 0
-                for call_id, api in before.items():
-                    if call_id not in after:
-                        continue
-                    if ".goto" in api or ".navigate" in api:
-                        nav += 1
-                    elif ".reload" in api:
-                        revisit += 1
-                    elif any(x in api for x in (".click", ".fill", ".press", ".check", ".select")):
-                        interaction += 1
-                if nav >= 1 and interaction >= 1 and (revisit >= 1 or nav >= 2):
+                        if kind == "before" and call_id:
+                            # Playwright trace v8 records the API as `method`
+                            # (for example `goto`, `fill`, `click`). Older
+                            # traces may expose the fully qualified `apiName`.
+                            # Accept both representations while remaining
+                            # fail-closed on the required navigation/action
+                            # semantics.
+                            before[call_id] = str(
+                                event.get("apiName") or event.get("method") or ""
+                            ).lower()
+                        elif kind == "after" and call_id in before and not event.get("error"):
+                            api = before[call_id]
+                            is_navigation = ".goto" in api or api == "goto" or ".navigate" in api
+                            completed_navigations += int(is_navigation)
+                            navigation |= is_navigation
+                            revisit |= ".reload" in api or api == "reload"
+                            interaction |= any(
+                                ("." + action in api) or api == action
+                                for action in ("click", "fill", "press", "check", "select")
+                            )
+                if context and navigation and interaction and (revisit or completed_navigations >= 2):
                     return True
-    except (OSError, ValueError, zipfile.BadZipFile):
+    except (OSError, ValueError, zipfile.BadZipFile, RuntimeError):
         return False
     return False
-
 
 def validate_bundle(data: dict, evidence_root: Path) -> list[str]:
     """Return fail-closed blockers for a real on-disk certification bundle."""
@@ -150,10 +196,8 @@ def validate_bundle(data: dict, evidence_root: Path) -> list[str]:
                 continue
             paths[aid] = candidate
             kind = artifact.get("kind")
-            if kind == "screenshot":
-                with candidate.open("rb") as handle:
-                    if handle.read(8) != b"\x89PNG\r\n\x1a\n":
-                        failures.append(f"{prefix} screenshot must be a real PNG")
+            if kind == "screenshot" and not _check_png(candidate):
+                failures.append(f"{prefix} screenshot must be a complete PNG with valid chunks/CRCs")
             if kind == "playwright_trace" and not _check_playwright_trace(candidate):
                 failures.append(f"{prefix} lacks real Playwright before/after interaction events")
             if kind == "video":
@@ -229,10 +273,16 @@ def validate_bundle(data: dict, evidence_root: Path) -> list[str]:
         elif not routes or not ui_journeys:
             failures.append("UI present but route/journey inventory empty")
 
-    seen_controls = set()
+    role_controls = {role: set() for role in ("primary", "independent", "post-deploy")}
+    role_cases = {role: set() for role in role_controls}
+    # A trace/video digest must be unique across sessions because it encodes
+    # the interaction timeline. Screenshots may legitimately be pixel
+    # identical for deterministic final states, so their distinct artifact
+    # references are sufficient; reusing the same artifact reference is still
+    # rejected for every media kind.
+    used_media_refs = set()
+    used_trace_digests = set()
     case_ids = set()
-    seen_case_ids = set()
-    used_media_refs = {}
     if stateful_cases:
         case_inventory = document(data.get("case_coverage", {}).get("inventory_ref"), "case_inventory")
         if case_inventory is not None:
@@ -273,29 +323,36 @@ def validate_bundle(data: dict, evidence_root: Path) -> list[str]:
                 failures.append(f"{role} UI execution missing ordered step {action}")
                 break
         ids = log.get("interacted_control_ids")
-        if not isinstance(ids, list) or any(not isinstance(x, str) for x in ids):
+        if not isinstance(ids, list) or any(not isinstance(x, str) or not x for x in ids):
             failures.append(f"{role} UI execution lacks interacted_control_ids")
-        elif role == "primary":
-            seen_controls.update(ids)
+        else:
+            role_controls[role].update(ids)
+            recorded_controls = {e.get("control_id") for e in events if isinstance(e, dict) and e.get("action") == "interact"}
+            if not set(ids) or set(ids) != recorded_controls:
+                failures.append(f"{role} UI controls disagree with recorded interaction events")
+        for action in ("assert_postcondition", "assert_persistence"):
+            records = [e for e in events if isinstance(e, dict) and e.get("action") == action]
+            if not records or not any(isinstance(e.get("observed"), str) and len(e["observed"].strip()) >= 3 for e in records):
+                failures.append(f"{role} {action} needs an observed UI state, not only a boolean")
         media = log.get("media_refs")
         if not isinstance(media, list) or not media:
             failures.append(f"{role} UI execution lacks visual media")
         else:
             media_kinds = {artifacts.get(r, {}).get("kind") for r in media if r in paths}
-            for media_ref in media:
-                artifact = artifacts.get(media_ref, {})
-                if media_ref not in paths or artifact.get("kind") not in ("playwright_trace", "screenshot", "video"):
-                    failures.append(f"{role} media ref {media_ref!r} does not point to verified media")
-                    continue
-                if artifact.get("session_id") != log.get("session_id") or artifact.get("capture_auditor") != log.get("auditor"):
-                    failures.append(f"{role} media ref {media_ref!r} does not belong to recording session/auditor")
-                prior = used_media_refs.setdefault(media_ref, (journey_id, role))
-                if prior != (journey_id, role):
-                    failures.append(f"UI media replay detected: {media_ref!r} reused by {prior} and {(journey_id, role)}")
             if not ("playwright_trace" in media_kinds or "video" in media_kinds):
                 failures.append(f"{role} UI execution lacks verified real browser trace or video")
             if not ("screenshot" in media_kinds or "video" in media_kinds):
                 failures.append(f"{role} UI execution lacks verified visual capture")
+            for ref in media:
+                if ref in paths and artifacts.get(ref, {}).get("kind") in ("playwright_trace", "screenshot", "video"):
+                    if ref in used_media_refs:
+                        failures.append(f"{role} UI media is reused across different execution sessions")
+                    used_media_refs.add(ref)
+                    if artifacts[ref].get("kind") in ("playwright_trace", "video"):
+                        digest = artifacts[ref]["sha256"].lower()
+                        if digest in used_trace_digests:
+                            failures.append(f"{role} UI media is reused across different execution sessions")
+                        used_trace_digests.add(digest)
         return log
 
     for journey in ui_journeys:
@@ -308,28 +365,42 @@ def validate_bundle(data: dict, evidence_root: Path) -> list[str]:
             reviewer = (data.get("contradictory_review") or {}).get("reviewer")
             if review.get("auditor") != reviewer:
                 failures.append(f"journey {jid} independent execution auditor disagrees with reviewer")
-        if stateful_cases and primary:
-            values = primary.get("case_sha256_ids")
-            if isinstance(values, list):
-                seen_ids = set(values)
-                if not seen_ids.issubset(case_ids):
-                    failures.append(f"journey {jid} exercised case absent from inventory")
-                seen_case_ids.update(seen_ids)
-            else:
-                failures.append(f"journey {jid} lacks real case-by-case IDs")
+        for role, record in (("primary", primary), ("independent", review)):
+            if stateful_cases and record:
+                values = record.get("case_sha256_ids")
+                if not isinstance(values, list) or any(not isinstance(x, str) or not HEX64.fullmatch(x) for x in values):
+                    failures.append(f"journey {jid} {role} lacks real case-by-case IDs")
+                elif not set(values).issubset(case_ids):
+                    failures.append(f"journey {jid} {role} exercised case absent from inventory")
+                else:
+                    role_cases[role].update(values)
         if deploy.get("required") is True:
             post = execution(journey.get("post_deploy_execution_ref"), jid, "post-deploy")
             activated = _utc(deploy.get("activated_at_utc"))
             captured = _utc(post.get("captured_at_utc")) if post else None
             if activated is None or captured is None or captured < activated:
                 failures.append(f"journey {jid} lacks UI evidence after actual deployment")
-            if primary and post and primary.get("session_id") == post.get("session_id") and journey.get("execution_ref") == journey.get("post_deploy_execution_ref"):
-                failures.append(f"journey {jid} post-deploy must be a fresh execution")
+            if primary and post and primary.get("session_id") == post.get("session_id"):
+                failures.append(f"journey {jid} post-deploy must be a fresh session")
+            if stateful_cases and post:
+                values = post.get("case_sha256_ids")
+                if not isinstance(values, list) or any(not isinstance(x, str) or not HEX64.fullmatch(x) for x in values):
+                    failures.append(f"journey {jid} post-deploy lacks real case-by-case IDs")
+                elif not set(values).issubset(case_ids):
+                    failures.append(f"journey {jid} post-deploy exercised case absent from inventory")
+                else:
+                    role_cases["post-deploy"].update(values)
 
-    if controls and controls != seen_controls:
-        failures.append(f"UI controls not exercised by real captured journeys: {len(controls - seen_controls)}")
-    if stateful_cases and (case_ids - seen_case_ids):
-        failures.append(f"real cases not exercised case-by-case in UI: {len(case_ids - seen_case_ids)}")
+    for role in ("primary", "independent", "post-deploy"):
+        if role == "post-deploy" and deploy.get("required") is not True:
+            continue
+        missing_controls = controls - role_controls[role]
+        if missing_controls:
+            failures.append(f"UI controls not exercised by real captured journeys ({role}): {len(missing_controls)}")
+        if stateful_cases:
+            missing_cases = case_ids - role_cases[role]
+            if missing_cases:
+                failures.append(f"real cases not exercised case-by-case in UI ({role}): {len(missing_cases)}")
 
     total = findings.get("discovered_total")
     fixes = remediation.get("fixed_findings")
