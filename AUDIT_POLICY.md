@@ -15,6 +15,7 @@ Toda auditoria formal deve executar como conjunto obrigatório:
 - `docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.md`;
 - `docs/quality/AUDIT_SELF_TEST_V1.md` quando houver mudança material no mecanismo/gate de auditoria ou quando o projeto possuir gates automatizados a certificar;
 - `docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md` quando existir UI;
+- `docs/quality/AUDIT_UI_EVIDENCE_INTEGRITY_V2.md` para evidencias reais em disco, cobertura de cada jornada/caso, reauditoria e continuidade;
 - `docs/quality/AUDIT_JOURNEY_INVENTORY_V1.md`;
 - `docs/quality/AUDIT_CLEAN_ROOM_REALITY_V1.md`;
 - `docs/quality/AUDIT_HARDENING_MAX_V1.md`;
@@ -184,3 +185,7 @@ Falha, limite, autenticacao/tooling indisponivel, encerramento sem artefatos ou 
 O estado de monitoramento de subagentes deve ser persistido em arquivo/ledger do projeto e sobreviver a espera, reconexao, verificacoes adicionais, limite ou interrupcao da resposta do ChatGPT.
 
 Indicadores da interface do chat nao contam como evidencia de progresso do subagente. Ao retomar, o controlador deve ler o estado persistido, verificar artefatos/commits/testes/efeitos reais e executar takeover automatico quando os criterios de falha ou estagnacao forem satisfeitos.
+
+## DETACHED_TASK_RECOVERY_E2E_V7 — certificação da continuidade desacoplada
+
+Continuidade de tarefa (watchdog → dispatcher → executor real) nunca pode ser certificada `APTO` apenas por presença de arquivo, string, política documentada ou wiring estático. É obrigatória evidência fresca de produção: `verification=continuity_e2e_pass` produzida por `scripts/task_continuity_e2e.py` (workflow `task-continuity-production-e2e.yml`, runner `shopvivaliz-a1-deploy`), com o daemon já em execução detectando, enfileirando, executando e concluindo uma tarefa sintética por conta própria — sem o probe/auditor invocar watchdog/dispatcher diretamente. Resultado do ledger `no_progress`, checkpoint não terminal, ACK de worker usado como prova, ou `task_id`/`fingerprint` não correlacionado invalidam o `APTO`. Ver `docs/knowledge/task-continuity.md` (policy `DETACHED_TASK_RECOVERY_E2E_V7`).

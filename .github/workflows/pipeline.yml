@@ -9,8 +9,7 @@ on:
         default: '100'
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 jobs:
   run:
@@ -23,14 +22,17 @@ jobs:
     steps:
       - name: Checkout pipeline repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Checkout Shopvivaliz-site
-        # Full read/write access to Shopvivaliz-site so pipeline steps can
-        # read assets (images, configs) and push processed results back.
+        # Read access is sufficient for the current pipeline; credentials are
+        # deliberately not persisted into the checkout.
         uses: actions/checkout@v4
         with:
           repository: Vivaliz-site/site-shopvivaliz
           token: ${{ secrets.GH_PAT }}
+          persist-credentials: false
           path: shopvivaliz-site
 
       - uses: actions/setup-python@v5

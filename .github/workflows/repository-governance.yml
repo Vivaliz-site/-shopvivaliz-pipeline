@@ -20,6 +20,8 @@ jobs:
           python-version: '3.12'
       - name: Validate governance contract
         run: bash scripts/repository-governance-validate.sh ci
+      - name: Guard issue_comment listener invariant
+        run: python3 scripts/governance/check-issue-comment-listeners.py
       - name: Verify audit self-test evidence
         run: |
           test -s artifacts/audit-governance-self-test/report.json

@@ -1,0 +1,123 @@
+name: Delete Superseded Solange via Pipeline PAT Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/delete-superseded-solange-via-pipeline-pat-once.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: delete-superseded-solange-via-pipeline-pat-once
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GH_PAT }}
+      TARGET_REPO: fredmourao-ai/solange-rolla
+      CANONICAL_REPO: fredmourao-ai/solange-rolla-consultorio
+      SITE_REPO: Vivaliz-site/site-shopvivaliz
+      SITE_BRANCH: test/checkpoint-first-zero-window-20260927
+      PIPELINE_REPO: Vivaliz-site/-shopvivaliz-pipeline
+      PIPELINE_BRANCH: fix/authenticated-global-audit-policy-bridge-20260927
+      EXECUTION_ID: chatgpt-20260927-global-continuity-cleanup-pipeline-pat
+    steps:
+      - name: Record execution provenance
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf 'execution_id=%s\n' "$EXECUTION_ID"
+          printf 'actor=%s\nrepository=%s\nref=%s\nsha=%s\nrun_id=%s\n' \
+            "$GITHUB_ACTOR" "$GITHUB_REPOSITORY" "$GITHUB_REF" "$GITHUB_SHA" "$GITHUB_RUN_ID"
+          echo 'signature_status=platform_attested_github_actions'
+
+      - name: Preflight immutable targets and merged refs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "${GH_TOKEN:-}" || { echo "ERROR GH_PAT secret is empty" >&2; exit 2; }
+          test "$TARGET_REPO" = "fredmourao-ai/solange-rolla"
+          test "$CANONICAL_REPO" = "fredmourao-ai/solange-rolla-consultorio"
+          test "$SITE_REPO" = "Vivaliz-site/site-shopvivaliz"
+          test "$PIPELINE_REPO" = "Vivaliz-site/-shopvivaliz-pipeline"
+
+          canonical="$(gh api "repos/$CANONICAL_REPO" --jq .full_name)"
+          test "$canonical" = "$CANONICAL_REPO"
+
+          if gh api "repos/$TARGET_REPO" >/dev/null 2>&1; then
+            admin="$(gh api "repos/$TARGET_REPO" --jq '.permissions.admin // false')"
+            test "$admin" = "true"
+            readme="$(gh api "repos/$TARGET_REPO/readme" -H 'Accept: application/vnd.github.raw+json')"
+            grep -Fq 'REPOSITÓRIO HISTÓRICO / SUPERSEDIDO' <<<"$readme"
+            grep -Fq "$CANONICAL_REPO" <<<"$readme"
+          else
+            echo "TARGET_ALREADY_ABSENT=true"
+          fi
+
+          prove_merged_ref() {
+            local repo="$1" branch="$2"
+            local tip main_sha status
+            if ! tip="$(gh api "repos/$repo/git/ref/heads/$branch" --jq .object.sha 2>/dev/null)"; then
+              echo "REF_ALREADY_ABSENT repo=$repo branch=$branch"
+              return 0
+            fi
+            main_sha="$(gh api "repos/$repo/commits/main" --jq .sha)"
+            status="$(gh api "repos/$repo/compare/$tip...$main_sha" --jq .status)"
+            case "$status" in
+              ahead|identical) ;;
+              *) echo "ERROR ref is not fully merged repo=$repo branch=$branch status=$status" >&2; exit 3 ;;
+            esac
+            echo "REF_MERGED repo=$repo branch=$branch tip=$tip"
+          }
+
+          prove_merged_ref "$SITE_REPO" "$SITE_BRANCH"
+          prove_merged_ref "$PIPELINE_REPO" "$PIPELINE_BRANCH"
+
+      - name: Delete superseded repository and merged branches
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if gh api "repos/$TARGET_REPO" >/dev/null 2>&1; then
+            gh api --method DELETE "repos/$TARGET_REPO"
+          fi
+
+          delete_ref_if_present() {
+            local repo="$1" branch="$2"
+            if gh api "repos/$repo/git/ref/heads/$branch" >/dev/null 2>&1; then
+              gh api --method DELETE "repos/$repo/git/refs/heads/$branch"
+            fi
+          }
+
+          delete_ref_if_present "$SITE_REPO" "$SITE_BRANCH"
+          delete_ref_if_present "$PIPELINE_REPO" "$PIPELINE_BRANCH"
+
+      - name: Verify final state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if gh api "repos/$TARGET_REPO" >/dev/null 2>&1; then
+            echo "ERROR legacy repository still resolves" >&2
+            exit 10
+          fi
+
+          canonical="$(gh api "repos/$CANONICAL_REPO" --jq .full_name)"
+          test "$canonical" = "$CANONICAL_REPO"
+
+          verify_ref_absent() {
+            local repo="$1" branch="$2"
+            if gh api "repos/$repo/git/ref/heads/$branch" >/dev/null 2>&1; then
+              echo "ERROR merged branch still resolves repo=$repo branch=$branch" >&2
+              exit 11
+            fi
+          }
+
+          verify_ref_absent "$SITE_REPO" "$SITE_BRANCH"
+          verify_ref_absent "$PIPELINE_REPO" "$PIPELINE_BRANCH"
+          echo "GLOBAL_CONTINUITY_CLEANUP=PASS"
