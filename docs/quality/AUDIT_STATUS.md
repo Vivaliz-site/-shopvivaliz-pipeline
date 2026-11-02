@@ -56,3 +56,12 @@ Alto para uso operacional: o workflow canônico está desatualizado em relação
 
 ## Regra de validade
 Esta auditoria cobre o SHA `31a9653d88437f19a499e5075991d12dde623ca8` e o estado dos workflows observado em 2026-09-16. Qualquer correção do target, secrets, modelo de IA ou write path exige reauditoria.
+
+## 2026-11-02 — repositorio Solange transferido e politica V5 global
+
+- Base SHA: 99fc73d2bccb26cf64d6bff563b0ab6cc79a40bb
+- Impacto: atualiza registro V5 de identidade do mesmo GitHub repository_id 1345489426 para Vivaliz-site/solange-rolla-consultorio, removendo somente nome anterior; todos os demais repositorios e seus gates preservados. Normaliza manifest CRLF para LF sem mudar outras propriedades.
+- Testes: JSON e hashes reais da politica e certifier, aceitando nome novo e recusando antigo no validator global, sem alterar regras de seguranca.
+- Evidencias: repo ID 1345489426, redirect GitHub 301 do endereco antigo; dois hashes de script regenerados e pinados.
+- Pendencias: atualizar mirrors nos repositorios governados e executar gates protegidos; UI clinica e restore nao certificados.
+- Estado: NAO_APTO
