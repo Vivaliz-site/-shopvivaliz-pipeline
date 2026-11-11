@@ -1,4 +1,4 @@
-# Acesso remoto canônico dos agentes — topologia atual (2026-10-29)
+# Acesso remoto canônico dos agentes — topologia atualizada (2026-11-11)
 
 **Obrigatório:** antes de qualquer tarefa de VM, runtime, navegador, serviço, deploy, logs ou recuperação, ler no `main` de `Vivaliz-site/site-shopvivaliz` os arquivos `AGENTS.md`, `docs/knowledge/current-topology-and-access-2026-10-29.md`, `docs/knowledge/host-access.md` e `docs/knowledge/agent-rules.md`. Registrar SHA, host, identidade, sessão, permissão e evidência; documentos históricos desta pipeline não substituem o estado de runtime.
 
@@ -6,7 +6,7 @@
 
 | Destino | Conta OCI e função | Transporte operacional |
 |---|---|---|
-| `marina-a1-4c24g` | ESPOSA; **web/deploy/MySQL/workers/runner** | **Remote Desktop Commander direto** comprovado online; descobrir `deviceId` em `list_devices` e verificar `hostname -s`, `id -un` e autorização; RDC 2 e SSH privado/Tailscale exigem provas próprias |
+| `marina-a1-4c24g` | ESPOSA; **web/deploy/MySQL/workers/runner** | **ShopVivaliz Remote Control MCP** (rota administrativa nativa com grant verificado; `admin_command_run` retornou `hostname=marina-a1-4c24g`, `ubuntu` em 11/11/2026); revalidar permissões e lease por operação |
 | `always-free-arm-1787907847-26` | PRINCIPAL; backend/controller/MCP central/browser corporativo/MEI/M365 | **ShopVivaliz Remote Control MCP**, limitado à allowlist válida, com `hosts_list` e `host_health` |
 | `Fred-Win`, `KOCEPSV` | Suporte/estação Windows | Canal autorizado por host, confirmado antes do uso; nunca servidor web ou navegador canônico de agentes |
 
@@ -14,8 +14,8 @@
 
 ## MCPs, SSH, GUI e Cloudflare
 
-1. **Backend:** MCP central disponível, mas o catálogo `hosts_list` ainda inclui a VM excluída e **não contém Marina**. Esta divergência exige correção no código/serviço da controladora; não executar comandos contra a origem.
-2. **Marina:** RDC direto é a rota atualmente comprovada para operações autorizadas. O `marina-direct-mcp` está apenas em staging/read-only; serviços locais e túnel independente `shopvivaliz-marina-mcp.service`/`shopvivaliz-marina-mcp-tunnel.service` estavam inativos. `shopvivaliz-cloudflared-admin.service` ativo não comprova acesso pelo MCP OpenAI. Não alegar sudo, shell remoto ou conector ChatGPT ativo sem prova efetiva.
+1. **Backend:** MCP central disponível. O inventário atual contém backend, Marina, Fred-Win e KOCEPSV, sem a origem descomissionada. Verificar schema e permissões efetivas por chamada antes de operar; a disponibilidade de cada Windows depende do relay conectado.
+2. **Marina:** usar o MCP central para shell administrativo e inspeção de serviços quando o grant e os locks autorizarem. O serviço MCP independente é uma capacidade separada e exige autenticação/prova própria; `shopvivaliz-cloudflared-admin.service` ativo isoladamente não certifica OAuth. Não presumir permissões por inventário ou estado histórico.
 3. **SSH privado/VCN/Tailscale:** somente se a identidade e a host key forem verificadas e o mecanismo realmente provisionado. Não usar SSH público, login root público, `StrictHostKeyChecking=no`, senha copiada ou chave herdada da VM origem.
 4. **GUI e navegador:** browser/CDP de agentes ShopVivaliz permanece nos perfis corporativos isolados do backend quando autenticação e bridge forem comprovadas; RustDesk e desktop são canais gráficos com identidade e lease próprios. Windows não é fallback automático de browser de agente.
 5. **GitHub Actions, OCI Bastion, console e Run Command:** somente bootstrap/recovery e operações formalmente habilitadas. Nunca contornar negativa explícita de privilégio, RBAC, MFA, lease ou aprovação por outro canal.
